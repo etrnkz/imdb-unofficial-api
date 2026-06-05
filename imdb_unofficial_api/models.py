@@ -31,6 +31,13 @@ class Credit:
 
 
 @dataclass
+class EpisodeInfo:
+    season_number: Optional[str] = None
+    episode_number: Optional[str] = None
+    text: Optional[str] = None
+
+
+@dataclass
 class Title:
     id: Optional[str] = None
     title: Optional[str] = None
@@ -51,7 +58,14 @@ class Title:
     cast: list[Credit] = field(default_factory=list)
     recommendations: list["Title"] = field(default_factory=list)
     taglines: list[str] = field(default_factory=list)
+    episode_info: Optional[EpisodeInfo] = None
     raw: Optional[dict] = None
+
+
+@dataclass
+class Season:
+    season_number: Optional[str] = None
+    text: Optional[str] = None
 
 
 @dataclass
@@ -64,6 +78,29 @@ class Name:
     image_url: Optional[str] = None
     filmography: list[Title] = field(default_factory=list)
     raw: Optional[dict] = None
+
+
+@dataclass
+class UserReview:
+    id: Optional[str] = None
+    author: Optional[str] = None
+    author_rating: Optional[int] = None
+    summary: Optional[str] = None
+    text: Optional[str] = None
+    spoiler: bool = False
+    up_votes: int = 0
+    down_votes: int = 0
+    helpfulness_score: Optional[int] = None
+    submission_date: Optional[str] = None
+
+
+@dataclass
+class MetacriticReview:
+    score: Optional[int] = None
+    reviewer: Optional[str] = None
+    quote: Optional[str] = None
+    site: Optional[str] = None
+    url: Optional[str] = None
 
 
 @dataclass

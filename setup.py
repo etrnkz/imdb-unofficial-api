@@ -16,6 +16,11 @@ setup(
     install_requires=[
         "httpx>=0.25.0",
     ],
+    entry_points={
+        "console_scripts": [
+            "imdb=imdb_unofficial_api.cli:main",
+        ],
+    },
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
