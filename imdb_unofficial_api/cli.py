@@ -314,6 +314,80 @@ def cmd_akas(args):
             print(f"  #{i} {a.text} ({a.country or 'N/A'}){attr_str}")
 
 
+def cmd_crazy_credits(args):
+    with ImdbClient() as client:
+        items = client.get_title_crazy_credits(args.id)
+        print(f"Crazy Credits ({len(items)}):")
+        for i, cc in enumerate(items, 1):
+            print(f"\n  #{i}: {cc.text[:200]}")
+
+
+def cmd_faqs(args):
+    with ImdbClient() as client:
+        items = client.get_title_faqs(args.id)
+        print(f"FAQs ({len(items)}):")
+        for i, faq in enumerate(items, 1):
+            s = " [SPOILER]" if faq.is_spoiler else ""
+            print(f"\n  #{i}{s}")
+            print(f"  Q: {faq.question}")
+            print(f"  A: {faq.answer}")
+
+
+def cmd_news(args):
+    with ImdbClient() as client:
+        items = client.get_title_news(args.id)
+        print(f"News ({len(items)}):")
+        for i, n in enumerate(items, 1):
+            print(f"\n  #{i} {n.article_title}")
+            print(f"       {n.date} by {n.byline or 'N/A'}")
+            print(f"       {n.url}")
+
+
+def cmd_certificate(args):
+    with ImdbClient() as client:
+        cert = client.get_title_certificate(args.id)
+        if cert:
+            print(f"Rating: {cert.rating} ({cert.country})")
+        else:
+            print("No certificate found")
+
+
+def cmd_production_status(args):
+    with ImdbClient() as client:
+        ps = client.get_title_production_status(args.id)
+        if ps:
+            print(f"Status: {ps.stage_text} ({ps.stage_id})")
+        else:
+            print("No production status found")
+
+
+def cmd_engagement(args):
+    with ImdbClient() as client:
+        es = client.get_title_engagement_stats(args.id)
+        print(f"Watchlist: {es.watchlist_count:,} ({es.watchlist_display or 'N/A'})")
+        print(f"Followers: {es.follower_count:,} ({es.follower_display or 'N/A'})")
+
+
+def cmd_rating_histogram(args):
+    with ImdbClient() as client:
+        items = client.get_title_rating_histogram(args.id)
+        print(f"Rating Histogram ({len(items)} buckets):")
+        for entry in items:
+            print(f"  {entry.rating}: {entry.vote_count:,} votes")
+
+
+def cmd_videos(args):
+    with ImdbClient() as client:
+        items = client.get_title_videos(args.id)
+        print(f"Videos ({len(items)}):")
+        for i, v in enumerate(items, 1):
+            print(f"\n  #{i}: {v.name}")
+            print(f"       Type: {v.content_type}  Duration: {v.duration_seconds}s")
+            if v.playback_urls:
+                for fmt, url in v.playback_urls.items():
+                    print(f"       [{fmt}] {url}")
+
+
 def cmd_external_links(args):
     with ImdbClient() as client:
         items = client.get_title_external_links(args.id)
@@ -433,6 +507,30 @@ def main():
     p_ext = sub.add_parser("external-links", help="Get external links")
     p_ext.add_argument("id", help="IMDb ID")
 
+    p_cc = sub.add_parser("crazy-credits", help="Get crazy credits")
+    p_cc.add_argument("id", help="IMDb ID")
+
+    p_faq = sub.add_parser("faqs", help="Get FAQs")
+    p_faq.add_argument("id", help="IMDb ID")
+
+    p_news = sub.add_parser("news", help="Get news articles")
+    p_news.add_argument("id", help="IMDb ID")
+
+    p_cert = sub.add_parser("certificate", help="Get content certificate")
+    p_cert.add_argument("id", help="IMDb ID")
+
+    p_ps = sub.add_parser("production-status", help="Get production status")
+    p_ps.add_argument("id", help="IMDb ID")
+
+    p_eng = sub.add_parser("engagement", help="Get engagement statistics")
+    p_eng.add_argument("id", help="IMDb ID")
+
+    p_hist = sub.add_parser("rating-histogram", help="Get rating distribution")
+    p_hist.add_argument("id", help="IMDb ID")
+
+    p_vid = sub.add_parser("videos", help="Get title videos")
+    p_vid.add_argument("id", help="IMDb ID")
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -468,6 +566,14 @@ def main():
         "connections": cmd_connections,
         "akas": cmd_akas,
         "external-links": cmd_external_links,
+        "crazy-credits": cmd_crazy_credits,
+        "faqs": cmd_faqs,
+        "news": cmd_news,
+        "certificate": cmd_certificate,
+        "production-status": cmd_production_status,
+        "engagement": cmd_engagement,
+        "rating-histogram": cmd_rating_histogram,
+        "videos": cmd_videos,
     }
     commands[args.command](args)
 
