@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="imdb-unofficial-api",
-    version="0.1.0",
+    version="0.2.0",
     description="Unofficial Python API client for IMDb via its internal GraphQL API",
     long_description=long_description,
     long_description_content_type="text/markdown",
