@@ -1,6 +1,8 @@
 import httpx
+import time
+import functools
 from typing import Optional, Any
-from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem, BoxOffice, CompanyCreditItem, TechSpec, ReleaseDateItem, ParentsGuideItem, KeywordItem, AwardNomination, WatchOptionItem, PlotSummary, TitleImage, SoundtrackTrack, TitleConnection, TitleAka, ExternalLink, CrazyCredit, FaqItem, NewsArticle, CertificateInfo, ProductionStatusInfo, EngagementStats, RatingHistogramEntry, TitleVideo, TitleMeta, InterestItem, RelatedList, NameHeight, NameAge, NameBirthDetails, NameDeathDetails, NameSpouse, NameAward, NameCredit
+from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem, BoxOffice, CompanyCreditItem, TechSpec, ReleaseDateItem, ParentsGuideItem, KeywordItem, AwardNomination, WatchOptionItem, PlotSummary, TitleImage, SoundtrackTrack, TitleConnection, TitleAka, ExternalLink, CrazyCredit, FaqItem, NewsArticle, CertificateInfo, ProductionStatusInfo, EngagementStats, RatingHistogramEntry, TitleVideo, TitleMeta, InterestItem, RelatedList, NameHeight, NameAge, NameBirthDetails, NameDeathDetails, NameSpouse, NameAward, NameCredit, NameOtherWork, NameTriviaItem, NameQuoteItem, NameTrademark
 
 GRAPHQL_URL = "https://api.graphql.imdb.com/"
 
@@ -146,6 +148,10 @@ query GetNameDetails($id: ID!) {
         }
       }
     }
+    otherWorks(first: 20) { edges { node { text { markdown } category { id text } } } }
+    trivia(first: 20) { edges { node { text { markdown } id } } }
+    quotes(first: 20) { edges { node { text { markdown } id } } }
+    trademarks(first: 20) { edges { node { text { markdown } } } }
   }
 }
 """
@@ -516,6 +522,8 @@ class ImdbClient:
         country: Optional[str] = "US",
         language: Optional[str] = "en-US",
         timeout: float = 30.0,
+        max_retries: int = 3,
+        cache_ttl: int = 0,
     ):
         self._client = httpx.Client(
             headers=dict(DEFAULT_HEADERS),
@@ -526,10 +534,22 @@ class ImdbClient:
             self._client.headers["X-Imdb-User-Country"] = country
         if language:
             self._client.headers["X-Imdb-User-Language"] = language
+        self._max_retries = max_retries
+        self._cache: dict[str, tuple[float, dict]] = {}
+        self._cache_ttl = cache_ttl
+
+    def _cache_key(self, query: str, variables: dict) -> str:
+        return f"{query}|{variables}"
 
     def _graphql(
         self, query: str, variables: dict[str, Any], operation_name: Optional[str] = None
     ) -> dict:
+        ck = self._cache_key(query, variables)
+        if self._cache_ttl > 0 and ck in self._cache:
+            ts, data = self._cache[ck]
+            if time.time() - ts < self._cache_ttl:
+                return data
+
         payload: dict[str, Any] = {
             "query": query,
             "variables": variables,
@@ -537,14 +557,31 @@ class ImdbClient:
         if operation_name:
             payload["operationName"] = operation_name
 
-        resp = self._client.post(GRAPHQL_URL, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
+        for attempt in range(self._max_retries):
+            resp = self._client.post(GRAPHQL_URL, json=payload)
+            if resp.status_code == 429:
+                wait = 2 ** attempt
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            data = resp.json()
 
-        if "errors" in data:
-            raise RuntimeError(f"GraphQL error: {data['errors']}")
+            if "errors" in data:
+                is_retriable = any(
+                    e.get("extensions", {}).get("code") in ("INTERNAL_ERROR", "TIMEOUT")
+                    for e in data["errors"]
+                )
+                if is_retriable and attempt < self._max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise RuntimeError(f"GraphQL error: {data['errors']}")
 
-        return data.get("data", {})
+            result = data.get("data", {})
+            if self._cache_ttl > 0:
+                self._cache[ck] = (time.time(), result)
+            return result
+
+        raise RuntimeError("Max retries exceeded")
 
     def get_title(self, title_id: str) -> Optional[Title]:
         tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
@@ -1497,6 +1534,48 @@ query GetPopular($limit: Int!) {
                 title_id=t.get("id"),
                 title_name=t.get("titleText", {}).get("text"),
             ))
+        return items
+
+    def get_name_other_works(self, name_id: str) -> list[NameOtherWork]:
+        data = self._fetch_name_details(name_id).get("name", {})
+        items: list[NameOtherWork] = []
+        for edge in data.get("otherWorks", {}).get("edges", []):
+            n = edge.get("node", {})
+            cat = n.get("category")
+            items.append(NameOtherWork(
+                text=n.get("text", {}).get("markdown"),
+                category=cat.get("text") if cat else None,
+            ))
+        return items
+
+    def get_name_trivia(self, name_id: str) -> list[NameTriviaItem]:
+        data = self._fetch_name_details(name_id).get("name", {})
+        items: list[NameTriviaItem] = []
+        for edge in data.get("trivia", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(NameTriviaItem(
+                id=n.get("id"),
+                text=n.get("text", {}).get("markdown"),
+            ))
+        return items
+
+    def get_name_quotes(self, name_id: str) -> list[NameQuoteItem]:
+        data = self._fetch_name_details(name_id).get("name", {})
+        items: list[NameQuoteItem] = []
+        for edge in data.get("quotes", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(NameQuoteItem(
+                id=n.get("id"),
+                text=n.get("text", {}).get("markdown"),
+            ))
+        return items
+
+    def get_name_trademarks(self, name_id: str) -> list[NameTrademark]:
+        data = self._fetch_name_details(name_id).get("name", {})
+        items: list[NameTrademark] = []
+        for edge in data.get("trademarks", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(NameTrademark(text=n.get("text", {}).get("markdown")))
         return items
 
     def close(self):

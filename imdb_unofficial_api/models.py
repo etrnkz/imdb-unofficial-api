@@ -360,6 +360,29 @@ class NameCredit:
 
 
 @dataclass
+class NameOtherWork:
+    text: Optional[str] = None
+    category: Optional[str] = None
+
+
+@dataclass
+class NameTriviaItem:
+    id: Optional[str] = None
+    text: Optional[str] = None
+
+
+@dataclass
+class NameQuoteItem:
+    id: Optional[str] = None
+    text: Optional[str] = None
+
+
+@dataclass
+class NameTrademark:
+    text: Optional[str] = None
+
+
+@dataclass
 class TitleVideo:
     id: Optional[str] = None
     name: Optional[str] = None
