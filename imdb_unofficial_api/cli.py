@@ -195,6 +195,90 @@ def cmd_locations(args):
                 print(f"   {loc['text']}")
 
 
+def cmd_box_office(args):
+    with ImdbClient() as client:
+        bo = client.get_title_box_office(args.id)
+        print(f"Budget: ${bo.budget:,} {bo.budget_currency}" if bo.budget else "Budget: N/A")
+        print(f"Lifetime Gross: ${bo.lifetime_gross:,} {bo.lifetime_currency}" if bo.lifetime_gross else "Lifetime Gross: N/A")
+        if bo.opening_weekend_gross:
+            print(f"Opening Weekend: ${bo.opening_weekend_gross:,} {bo.opening_weekend_currency} ({bo.opening_theaters} theaters)")
+        else:
+            print("Opening Weekend: N/A")
+
+
+def cmd_company_credits(args):
+    with ImdbClient() as client:
+        items = client.get_title_company_credits(args.id)
+        print(f"Company Credits ({len(items)}):")
+        for i, c in enumerate(items, 1):
+            print(f"  #{i} [{c.category}] {c.company_name} ({c.company_id})")
+
+
+def cmd_tech_specs(args):
+    with ImdbClient() as client:
+        ts = client.get_title_tech_specs(args.id)
+        if ts.aspect_ratios:
+            print(f"Aspect Ratios: {', '.join(ts.aspect_ratios)}")
+        if ts.sound_mixes:
+            print(f"Sound Mixes: {', '.join(ts.sound_mixes)}")
+        if ts.colorations:
+            print(f"Colorations: {', '.join(ts.colorations)}")
+        if ts.cameras:
+            print(f"Cameras: {', '.join(ts.cameras)}")
+
+
+def cmd_release_dates(args):
+    with ImdbClient() as client:
+        items = client.get_title_release_dates(args.id)
+        print(f"Release Dates ({len(items)}):")
+        for i, rd in enumerate(items, 1):
+            date = f"{rd.year}-{rd.month:02d}-{rd.day:02d}" if rd.year and rd.month and rd.day else f"{rd.year or 'N/A'}"
+            attrs = ", ".join(rd.attributes) if rd.attributes else ""
+            attr_str = f" [{attrs}]" if attrs else ""
+            print(f"  #{i} {rd.country or 'N/A'}: {date}{attr_str}")
+
+
+def cmd_parents_guide(args):
+    with ImdbClient() as client:
+        items = client.get_title_parents_guide(args.id)
+        print(f"Parents Guide ({len(items)}):")
+        for i, pg in enumerate(items, 1):
+            print(f"\n  #{i} [{pg.category}]:")
+            if pg.text:
+                print(f"    {pg.text[:200]}")
+
+
+def cmd_keywords(args):
+    with ImdbClient() as client:
+        items = client.get_title_keywords(args.id)
+        print(f"Keywords ({len(items)}):")
+        for i, kw in enumerate(items, 1):
+            print(f"  #{i} {kw.text} ({kw.legacy_id})")
+
+
+def cmd_awards(args):
+    with ImdbClient() as client:
+        items = client.get_title_awards(args.id)
+        print(f"Awards & Nominations ({len(items)}):")
+        for i, a in enumerate(items, 1):
+            winner = "WON" if a.is_winner else "NOMINATED"
+            print(f"  #{i} [{winner}] {a.award_name} - {a.category}")
+            if a.notes:
+                print(f"       {a.notes[:150]}")
+
+
+def cmd_watch(args):
+    with ImdbClient() as client:
+        wo = client.get_title_watch_options(args.id)
+        if wo:
+            print(f"Provider: {wo.provider}")
+            print(f"Offer: {wo.offer_type}")
+            print(f"Link: {wo.link}")
+            print(f"Description: {wo.description}")
+        else:
+            print("No watch options found")
+
+
 def main():
     parser = argparse.ArgumentParser(prog="imdb", description="IMDb Unofficial API CLI")
     parser.add_argument("--version", action="version", version="imdb-unofficial-api 1.0.0")
@@ -251,6 +335,30 @@ def main():
     p_locs = sub.add_parser("locations", help="Get filming locations")
     p_locs.add_argument("id", help="IMDb ID")
 
+    p_box = sub.add_parser("box-office", help="Get box office data")
+    p_box.add_argument("id", help="IMDb ID")
+
+    p_cc = sub.add_parser("company-credits", help="Get company credits")
+    p_cc.add_argument("id", help="IMDb ID")
+
+    p_ts = sub.add_parser("tech-specs", help="Get technical specifications")
+    p_ts.add_argument("id", help="IMDb ID")
+
+    p_rd = sub.add_parser("release-dates", help="Get release dates")
+    p_rd.add_argument("id", help="IMDb ID")
+
+    p_pg = sub.add_parser("parents-guide", help="Get parents guide")
+    p_pg.add_argument("id", help="IMDb ID")
+
+    p_kw = sub.add_parser("keywords", help="Get keywords")
+    p_kw.add_argument("id", help="IMDb ID")
+
+    p_aw = sub.add_parser("awards", help="Get awards and nominations")
+    p_aw.add_argument("id", help="IMDb ID")
+
+    p_wo = sub.add_parser("watch", help="Get watch options")
+    p_wo.add_argument("id", help="IMDb ID")
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -272,6 +380,14 @@ def main():
         "quotes": cmd_quotes,
         "goofs": cmd_goofs,
         "locations": cmd_locations,
+        "box-office": cmd_box_office,
+        "company-credits": cmd_company_credits,
+        "tech-specs": cmd_tech_specs,
+        "release-dates": cmd_release_dates,
+        "parents-guide": cmd_parents_guide,
+        "keywords": cmd_keywords,
+        "awards": cmd_awards,
+        "watch": cmd_watch,
     }
     commands[args.command](args)
 
