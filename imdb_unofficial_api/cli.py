@@ -72,6 +72,33 @@ def cmd_person(args):
             print("Person not found")
 
 
+def cmd_get_titles(args):
+    with ImdbClient() as client:
+        titles = client.get_titles(*args.ids)
+        for t in titles:
+            print_title(t)
+            print()
+
+
+def cmd_get_names(args):
+    with ImdbClient() as client:
+        names = client.get_names(*args.ids)
+        for n in names:
+            print(f"ID: {n.id}\nName: {n.name}\nImage: {n.image_url}\n")
+
+
+def cmd_search_person(args):
+    with ImdbClient() as client:
+        results = client.search_person(args.query, first=args.first or 20)
+        if not results:
+            print("No results")
+            return
+        for r in results:
+            name = r.title.encode('ascii', 'replace').decode() if r.title else ''
+            img = r.image_url or ''
+            print(f"  {r.id}  {name}  {img}")
+
+
 def cmd_name_height(args):
     with ImdbClient() as client:
         h = client.get_name_height(args.id)
@@ -719,6 +746,16 @@ def main():
     p_ntm = sub.add_parser("name-trademarks", help="Get person's trademarks")
     p_ntm.add_argument("id", help="IMDb ID")
 
+    p_bt = sub.add_parser("get-titles", help="Batch fetch titles")
+    p_bt.add_argument("ids", nargs="+", help="IMDb ID(s)")
+
+    p_bn = sub.add_parser("get-names", help="Batch fetch names")
+    p_bn.add_argument("ids", nargs="+", help="IMDb ID(s)")
+
+    p_sp = sub.add_parser("search-person", help="Search for people")
+    p_sp.add_argument("query", help="Person name")
+    p_sp.add_argument("--first", type=int, default=20)
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -778,6 +815,9 @@ def main():
         "name-trivia": cmd_name_trivia,
         "name-quotes": cmd_name_quotes,
         "name-trademarks": cmd_name_trademarks,
+        "get-titles": cmd_get_titles,
+        "get-names": cmd_get_names,
+        "search-person": cmd_search_person,
     }
     commands[args.command](args)
 
