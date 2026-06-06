@@ -1,6 +1,6 @@
 import httpx
 from typing import Optional, Any
-from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem, BoxOffice, CompanyCreditItem, TechSpec, ReleaseDateItem, ParentsGuideItem, KeywordItem, AwardNomination, WatchOptionItem, PlotSummary, TitleImage, SoundtrackTrack, TitleConnection, TitleAka, ExternalLink, CrazyCredit, FaqItem, NewsArticle, CertificateInfo, ProductionStatusInfo, EngagementStats, RatingHistogramEntry, TitleVideo
+from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem, BoxOffice, CompanyCreditItem, TechSpec, ReleaseDateItem, ParentsGuideItem, KeywordItem, AwardNomination, WatchOptionItem, PlotSummary, TitleImage, SoundtrackTrack, TitleConnection, TitleAka, ExternalLink, CrazyCredit, FaqItem, NewsArticle, CertificateInfo, ProductionStatusInfo, EngagementStats, RatingHistogramEntry, TitleVideo, TitleMeta, InterestItem, RelatedList
 
 GRAPHQL_URL = "https://api.graphql.imdb.com/"
 
@@ -21,6 +21,7 @@ from .client import (
     GET_TITLE_SEASONS_QUERY, GET_TITLE_EPISODES_QUERY,
     GET_TITLE_REVIEWS_QUERY, GET_TITLE_MEDIA_QUERY, ADVANCED_SEARCH_QUERY_BASE,
     GET_TITLE_EXTRAS_QUERY, GET_TITLE_INFO_QUERY, GET_TITLE_DETAILS_QUERY,
+    GET_TITLE_RECOMMENDATIONS_QUERY, GET_TITLE_META_QUERY,
 )
 
 
@@ -674,6 +675,53 @@ query GetPopular($limit: Int!) {
                 if dn and url:
                     v.playback_urls[dn] = url
             items.append(v)
+        return items
+
+    async def get_title_recommendations(self, title_id: str) -> list[Title]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_RECOMMENDATIONS_QUERY, {"id": tid}, "GetRecommendations")
+        titles: list[Title] = []
+        for edge in data.get("title", {}).get("moreLikeThisTitles", {}).get("edges", []):
+            node = edge.get("node", {})
+            t = Title(id=node.get("id"), title=node.get("titleText", {}).get("text"))
+            t.title_type = node.get("titleType", {}).get("text")
+            t.release_year = node.get("releaseYear", {}).get("year")
+            t.poster_url = node.get("primaryImage", {}).get("url")
+            rs = node.get("ratingsSummary")
+            if rs:
+                t.rating = Rating(aggregate_rating=rs.get("aggregateRating") or 0.0)
+            titles.append(t)
+        return titles
+
+    async def get_title_meta(self, title_id: str) -> TitleMeta:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_META_QUERY, {"id": tid}, "GetMeta")
+        m = data.get("title", {}).get("meta", {})
+        return TitleMeta(canonical_id=m.get("canonicalId"))
+
+    async def get_title_interests(self, title_id: str) -> list[InterestItem]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_META_QUERY, {"id": tid}, "GetMeta")
+        items: list[InterestItem] = []
+        for edge in data.get("title", {}).get("interests", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(InterestItem(
+                id=n.get("id"), text=n.get("primaryText", {}).get("text"),
+                score=n.get("score", {}).get("currentScore", 0),
+            ))
+        return items
+
+    async def get_title_related_lists(self, title_id: str) -> list[RelatedList]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_META_QUERY, {"id": tid}, "GetMeta")
+        items: list[RelatedList] = []
+        for edge in data.get("title", {}).get("relatedLists", {}).get("edges", []):
+            n = edge.get("node", {})
+            desc = n.get("description")
+            items.append(RelatedList(
+                id=n.get("id"), name=n.get("name", {}).get("originalText"),
+                description=desc.get("originalText", {}).get("markdown") if desc else None,
+            ))
         return items
 
     async def close(self):

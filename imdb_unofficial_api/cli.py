@@ -314,6 +314,40 @@ def cmd_akas(args):
             print(f"  #{i} {a.text} ({a.country or 'N/A'}){attr_str}")
 
 
+def cmd_recommendations(args):
+    with ImdbClient() as client:
+        titles = client.get_title_recommendations(args.id)
+        print(f"Recommendations ({len(titles)}):")
+        for i, t in enumerate(titles, 1):
+            r = t.rating.aggregate_rating if t.rating else "N/A"
+            print(f"  #{i}  {r:>3}  {t.title} ({t.release_year or 'N/A'}) [{t.title_type}]")
+
+
+def cmd_interests(args):
+    with ImdbClient() as client:
+        items = client.get_title_interests(args.id)
+        print(f"Interests ({len(items)}):")
+        for i, item in enumerate(items, 1):
+            print(f"  #{i} {item.text} (score: {item.score})")
+
+
+def cmd_related_lists(args):
+    with ImdbClient() as client:
+        items = client.get_title_related_lists(args.id)
+        print(f"Related Lists ({len(items)}):")
+        for i, lst in enumerate(items, 1):
+            print(f"  #{i} {lst.name} ({lst.id})")
+            if lst.description:
+                print(f"       {lst.description[:150]}")
+
+
+def cmd_meta(args):
+    with ImdbClient() as client:
+        m = client.get_title_meta(args.id)
+        print(f"Canonical ID: {m.canonical_id}")
+        print(f"IMDb URL: https://www.imdb.com/title/{m.canonical_id}/")
+
+
 def cmd_crazy_credits(args):
     with ImdbClient() as client:
         items = client.get_title_crazy_credits(args.id)
@@ -531,6 +565,18 @@ def main():
     p_vid = sub.add_parser("videos", help="Get title videos")
     p_vid.add_argument("id", help="IMDb ID")
 
+    p_rec = sub.add_parser("recommendations", help="Get similar titles")
+    p_rec.add_argument("id", help="IMDb ID")
+
+    p_int = sub.add_parser("interests", help="Get related interests/topics")
+    p_int.add_argument("id", help="IMDb ID")
+
+    p_rl = sub.add_parser("related-lists", help="Get user lists containing this title")
+    p_rl.add_argument("id", help="IMDb ID")
+
+    p_meta = sub.add_parser("meta", help="Get title metadata (canonical ID)")
+    p_meta.add_argument("id", help="IMDb ID")
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -574,6 +620,10 @@ def main():
         "engagement": cmd_engagement,
         "rating-histogram": cmd_rating_histogram,
         "videos": cmd_videos,
+        "recommendations": cmd_recommendations,
+        "interests": cmd_interests,
+        "related-lists": cmd_related_lists,
+        "meta": cmd_meta,
     }
     commands[args.command](args)
 

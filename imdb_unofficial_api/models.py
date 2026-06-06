@@ -296,6 +296,25 @@ class RatingHistogramEntry:
 
 
 @dataclass
+class TitleMeta:
+    canonical_id: Optional[str] = None
+
+
+@dataclass
+class InterestItem:
+    id: Optional[str] = None
+    text: Optional[str] = None
+    score: int = 0
+
+
+@dataclass
+class RelatedList:
+    id: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+@dataclass
 class TitleVideo:
     id: Optional[str] = None
     name: Optional[str] = None
