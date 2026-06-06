@@ -2,6 +2,7 @@ import httpx
 import time
 import functools
 from typing import Optional, Any
+from .exceptions import ImdbError, ImdbNotFoundError, ImdbRateLimitError, ImdbGraphQLError
 from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem, BoxOffice, CompanyCreditItem, TechSpec, ReleaseDateItem, ParentsGuideItem, KeywordItem, AwardNomination, WatchOptionItem, PlotSummary, TitleImage, SoundtrackTrack, TitleConnection, TitleAka, ExternalLink, CrazyCredit, FaqItem, NewsArticle, CertificateInfo, ProductionStatusInfo, EngagementStats, RatingHistogramEntry, TitleVideo, TitleMeta, InterestItem, RelatedList, NameHeight, NameAge, NameBirthDetails, NameDeathDetails, NameSpouse, NameAward, NameCredit, NameOtherWork, NameTriviaItem, NameQuoteItem, NameTrademark
 
 GRAPHQL_URL = "https://api.graphql.imdb.com/"
@@ -578,9 +579,9 @@ class ImdbClient:
         for attempt in range(self._max_retries):
             resp = self._client.post(GRAPHQL_URL, json=payload)
             if resp.status_code == 429:
-                wait = 2 ** attempt
-                time.sleep(wait)
-                continue
+                raise ImdbRateLimitError("Rate limited by IMDb API")
+            if resp.status_code == 404:
+                raise ImdbNotFoundError("Resource not found")
             resp.raise_for_status()
             data = resp.json()
 
@@ -592,12 +593,14 @@ class ImdbClient:
                 if is_retriable and attempt < self._max_retries - 1:
                     time.sleep(2 ** attempt)
                     continue
-                raise RuntimeError(f"GraphQL error: {data['errors']}")
+                raise ImdbGraphQLError(str(data["errors"]))
 
             result = data.get("data", {})
             if self._cache_ttl > 0:
                 self._cache[ck] = (time.time(), result)
             return result
+
+        raise ImdbError("Max retries exceeded")
 
         raise RuntimeError("Max retries exceeded")
 
@@ -1106,6 +1109,21 @@ query GetPopular($limit: Int!) {
 """
         data = self._graphql(query_str, {"limit": limit})
         return [self._parse_chart_title(node) for node in data.get("popularTitles", {}).get("titles", [])]
+
+    def get_top_rated_movies(self, first: int = 50) -> list[Title]:
+        return self.get_chart("TOP_RATED_MOVIES", first)
+
+    def get_top_rated_tv(self, first: int = 50) -> list[Title]:
+        return self.get_chart("TOP_RATED_TV_SHOWS", first)
+
+    def get_most_popular_movies(self, first: int = 50) -> list[Title]:
+        return self.get_chart("MOST_POPULAR_MOVIES", first)
+
+    def get_most_popular_tv(self, first: int = 50) -> list[Title]:
+        return self.get_chart("MOST_POPULAR_TV_SHOWS", first)
+
+    def get_lowest_rated_movies(self, first: int = 100) -> list[Title]:
+        return self.get_chart("LOWEST_RATED_MOVIES", first)
 
     def get_title_trailer(self, title_id: str) -> Optional[Trailer]:
         tid = title_id if title_id.startswith("tt") else f"tt{title_id}"

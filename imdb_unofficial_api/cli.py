@@ -198,12 +198,6 @@ def cmd_name_trademarks(args):
         for i, t in enumerate(items, 1):
             print(f"  #{i}: {t.text[:200]}")
 
-    with ImdbClient() as client:
-        items = client.get_name_credits(args.id)
-        print(f"Credits ({len(items)}):")
-        for i, c in enumerate(items, 1):
-            print(f"  #{i} [{c.category}] {c.title_name} ({c.title_id})")
-
 
 def cmd_cast(args):
     with ImdbClient() as client:
@@ -275,6 +269,41 @@ def cmd_popular(args):
         for t in titles:
             r = t.rating.aggregate_rating if t.rating else "N/A"
             print(f"  {r:>3}  {t.title} ({t.release_year or 'N/A'})")
+
+
+def cmd_top_rated_movies(args):
+    with ImdbClient() as client:
+        for i, t in enumerate(client.get_top_rated_movies(first=args.first or 50), 1):
+            r = t.rating.aggregate_rating if t.rating else "N/A"
+            print(f"#{i:>3}  {r:>3}  {t.title} ({t.release_year or 'N/A'})")
+
+
+def cmd_top_rated_tv(args):
+    with ImdbClient() as client:
+        for i, t in enumerate(client.get_top_rated_tv(first=args.first or 50), 1):
+            r = t.rating.aggregate_rating if t.rating else "N/A"
+            print(f"#{i:>3}  {r:>3}  {t.title} ({t.release_year or 'N/A'})")
+
+
+def cmd_most_popular_movies(args):
+    with ImdbClient() as client:
+        for i, t in enumerate(client.get_most_popular_movies(first=args.first or 50), 1):
+            r = t.rating.aggregate_rating if t.rating else "N/A"
+            print(f"#{i:>3}  {r:>3}  {t.title} ({t.release_year or 'N/A'})")
+
+
+def cmd_most_popular_tv(args):
+    with ImdbClient() as client:
+        for i, t in enumerate(client.get_most_popular_tv(first=args.first or 50), 1):
+            r = t.rating.aggregate_rating if t.rating else "N/A"
+            print(f"#{i:>3}  {r:>3}  {t.title} ({t.release_year or 'N/A'})")
+
+
+def cmd_lowest_rated_movies(args):
+    with ImdbClient() as client:
+        for i, t in enumerate(client.get_lowest_rated_movies(first=args.first or 100), 1):
+            r = t.rating.aggregate_rating if t.rating else "N/A"
+            print(f"#{i:>3}  {r:>3}  {t.title} ({t.release_year or 'N/A'})")
 
 
 def cmd_trailer(args):
@@ -756,6 +785,16 @@ def main():
     p_sp.add_argument("query", help="Person name")
     p_sp.add_argument("--first", type=int, default=20)
 
+    for name, help_text in [
+        ("top-rated-movies", "IMDb top rated movies"),
+        ("top-rated-tv", "IMDb top rated TV shows"),
+        ("most-popular-movies", "Most popular movies"),
+        ("most-popular-tv", "Most popular TV shows"),
+        ("lowest-rated-movies", "Lowest rated movies"),
+    ]:
+        p = sub.add_parser(name.replace("_", "-"), help=help_text)
+        p.add_argument("--first", type=int, default=50)
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -818,6 +857,11 @@ def main():
         "get-titles": cmd_get_titles,
         "get-names": cmd_get_names,
         "search-person": cmd_search_person,
+        "top-rated-movies": cmd_top_rated_movies,
+        "top-rated-tv": cmd_top_rated_tv,
+        "most-popular-movies": cmd_most_popular_movies,
+        "most-popular-tv": cmd_most_popular_tv,
+        "lowest-rated-movies": cmd_lowest_rated_movies,
     }
     commands[args.command](args)
 
