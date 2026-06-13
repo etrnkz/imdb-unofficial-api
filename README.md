@@ -62,4 +62,4 @@ imdb person nm0000138
 ---
 
 #### for any reverse enginering work
-contact me t.me/etrnkz
+contact me https://t.me/etrnkz
