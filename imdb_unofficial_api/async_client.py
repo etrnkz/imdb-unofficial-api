@@ -1,6 +1,6 @@
 import httpx
 from typing import Optional, Any
-from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview
+from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem
 
 GRAPHQL_URL = "https://api.graphql.imdb.com/"
 
@@ -19,7 +19,7 @@ from .client import (
     GET_TITLE_QUERY, SEARCH_QUERY, GET_NAME_QUERY,
     GET_TITLE_FULL_CREDITS_QUERY, GET_TITLE_CREDITS_BY_CATEGORY,
     GET_TITLE_SEASONS_QUERY, GET_TITLE_EPISODES_QUERY,
-    GET_TITLE_REVIEWS_QUERY, ADVANCED_SEARCH_QUERY_BASE,
+    GET_TITLE_REVIEWS_QUERY, GET_TITLE_MEDIA_QUERY, ADVANCED_SEARCH_QUERY_BASE,
 )
 
 
@@ -310,6 +310,73 @@ query GetPopular($limit: Int!) {
         data = await self._graphql(query_str, {"limit": limit})
         from .client import ImdbClient
         return [ImdbClient._parse_chart_title(None, node) for node in data.get("popularTitles", {}).get("titles", [])]
+
+    async def get_title_trailer(self, title_id: str) -> Optional[Trailer]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_MEDIA_QUERY, {"id": tid}, "GetMedia")
+        lt = data.get("title", {}).get("latestTrailer")
+        if not lt:
+            return None
+        t = Trailer(
+            id=lt.get("id"),
+            name=lt.get("name", {}).get("value"),
+            description=lt.get("description", {}).get("value"),
+            content_type=lt.get("contentType", {}).get("id"),
+            duration_seconds=lt.get("runtime", {}).get("value"),
+            thumbnail_url=lt.get("thumbnail", {}).get("url"),
+        )
+        for u in lt.get("playbackURLs", []):
+            dn = u.get("displayName", {}).get("value")
+            url = u.get("url")
+            if dn and url:
+                t.playback_urls[dn] = url
+        return t
+
+    async def get_title_trivia(self, title_id: str) -> list[TriviaItem]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_MEDIA_QUERY, {"id": tid}, "GetMedia")
+        items: list[TriviaItem] = []
+        for edge in data.get("title", {}).get("trivia", {}).get("edges", []):
+            body = edge.get("node", {}).get("displayableArticle", {}).get("body", {}).get("markdown")
+            if body:
+                items.append(TriviaItem(text=body))
+        return items
+
+    async def get_title_quotes(self, title_id: str) -> list[QuoteItem]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_MEDIA_QUERY, {"id": tid}, "GetMedia")
+        items: list[QuoteItem] = []
+        for edge in data.get("title", {}).get("quotes", {}).get("edges", []):
+            body = edge.get("node", {}).get("displayableArticle", {}).get("body", {}).get("markdown")
+            if body:
+                items.append(QuoteItem(text=body))
+        return items
+
+    async def get_title_goofs(self, title_id: str) -> list[GoofItem]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_MEDIA_QUERY, {"id": tid}, "GetMedia")
+        items: list[GoofItem] = []
+        for edge in data.get("title", {}).get("goofs", {}).get("edges", []):
+            n = edge.get("node", {})
+            text = n.get("text", {}).get("markdown")
+            cat = n.get("category", {}).get("text")
+            if text:
+                items.append(GoofItem(text=text, category=cat))
+        return items
+
+    async def get_title_filming_locations(self, title_id: str) -> list[dict]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_MEDIA_QUERY, {"id": tid}, "GetMedia")
+        items: list[dict] = []
+        for edge in data.get("title", {}).get("filmingLocations", {}).get("edges", []):
+            n = edge.get("node", {})
+            attrs = [a.get("text", "") for a in n.get("attributes", []) if a.get("text")]
+            items.append({
+                "location": n.get("location"),
+                "text": n.get("text"),
+                "attributes": attrs,
+            })
+        return items
 
     async def close(self):
         await self._client.aclose()

@@ -104,6 +104,33 @@ class MetacriticReview:
 
 
 @dataclass
+class Trailer:
+    id: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    content_type: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    thumbnail_url: Optional[str] = None
+    playback_urls: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class TriviaItem:
+    text: Optional[str] = None
+
+
+@dataclass
+class QuoteItem:
+    text: Optional[str] = None
+
+
+@dataclass
+class GoofItem:
+    text: Optional[str] = None
+    category: Optional[str] = None
+
+
+@dataclass
 class SearchResult:
     id: Optional[str] = None
     title: Optional[str] = None

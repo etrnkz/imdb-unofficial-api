@@ -144,6 +144,57 @@ def cmd_popular(args):
             print(f"  {r:>3}  {t.title} ({t.release_year or 'N/A'})")
 
 
+def cmd_trailer(args):
+    with ImdbClient() as client:
+        t = client.get_title_trailer(args.id)
+        if t:
+            print(f"Name: {t.name}")
+            print(f"Type: {t.content_type}")
+            print(f"Duration: {t.duration_seconds}s")
+            print(f"Thumbnail: {t.thumbnail_url}")
+            print("Playback URLs:")
+            for fmt, url in t.playback_urls.items():
+                print(f"  {fmt}: {url}")
+        else:
+            print("No trailer found")
+
+
+def cmd_trivia(args):
+    with ImdbClient() as client:
+        items = client.get_title_trivia(args.id)
+        print(f"Trivia ({len(items)}):")
+        for i, item in enumerate(items, 1):
+            print(f"\n#{i}: {item.text}")
+
+
+def cmd_quotes(args):
+    with ImdbClient() as client:
+        items = client.get_title_quotes(args.id)
+        print(f"Quotes ({len(items)}):")
+        for i, item in enumerate(items, 1):
+            print(f"\n#{i}: {item.text}")
+
+
+def cmd_goofs(args):
+    with ImdbClient() as client:
+        items = client.get_title_goofs(args.id)
+        print(f"Goofs ({len(items)}):")
+        for i, item in enumerate(items, 1):
+            print(f"\n#{i} [{item.category}]: {item.text}")
+
+
+def cmd_locations(args):
+    with ImdbClient() as client:
+        items = client.get_title_filming_locations(args.id)
+        print(f"Filming Locations ({len(items)}):")
+        for i, loc in enumerate(items, 1):
+            attrs = ", ".join(loc["attributes"])
+            attr_str = f" [{attrs}]" if attrs else ""
+            print(f"\n#{i}: {loc['location']}{attr_str}")
+            if loc["text"]:
+                print(f"   {loc['text']}")
+
+
 def main():
     parser = argparse.ArgumentParser(prog="imdb", description="IMDb Unofficial API CLI")
     parser.add_argument("--version", action="version", version="imdb-unofficial-api 1.0.0")
@@ -185,6 +236,21 @@ def main():
     p_popular = sub.add_parser("popular", help="Get popular titles")
     p_popular.add_argument("-n", "--first", type=int, default=20, help="Number of titles")
 
+    p_trailer = sub.add_parser("trailer", help="Get title trailer")
+    p_trailer.add_argument("id", help="IMDb ID")
+
+    p_trivia = sub.add_parser("trivia", help="Get title trivia")
+    p_trivia.add_argument("id", help="IMDb ID")
+
+    p_quotes = sub.add_parser("quotes", help="Get title quotes")
+    p_quotes.add_argument("id", help="IMDb ID")
+
+    p_goofs = sub.add_parser("goofs", help="Get title goofs")
+    p_goofs.add_argument("id", help="IMDb ID")
+
+    p_locs = sub.add_parser("locations", help="Get filming locations")
+    p_locs.add_argument("id", help="IMDb ID")
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -201,6 +267,11 @@ def main():
         "chart": cmd_chart,
         "trending": cmd_trending,
         "popular": cmd_popular,
+        "trailer": cmd_trailer,
+        "trivia": cmd_trivia,
+        "quotes": cmd_quotes,
+        "goofs": cmd_goofs,
+        "locations": cmd_locations,
     }
     commands[args.command](args)
 
