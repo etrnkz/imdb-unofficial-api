@@ -10,7 +10,11 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="IMDb-Unofficial-API",
-    url="https://github.com/yourusername/Imdb-unofficial-api",
+    url="https://github.com/etrnkz/imdb-unofficial-api",
+    project_urls={
+        "Source": "https://github.com/etrnkz/imdb-unofficial-api",
+        "Issues": "https://github.com/etrnkz/imdb-unofficial-api/issues",
+    },
     packages=find_packages(),
     python_requires=">=3.10",
     install_requires=[

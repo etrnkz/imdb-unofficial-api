@@ -4,9 +4,19 @@
 [![Python versions](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12%20|%203.13%20|%203.14-blue)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Unofficial Python SDK for IMDb's internal GraphQL API. **56 typed endpoints** covering titles, names, credits, charts, reviews, media, and more. No API key required.
+Unofficial Python SDK for IMDb's internal GraphQL API. 56 typed endpoints for titles, names, credits, charts, reviews and media. No API key required.
 
-**Features:** sync + async clients · full type hints · 55 CLI subcommands · cursor pagination · batch fetching · retry with backoff · optional caching · custom exceptions · no external dependencies beyond httpx
+What it does:
+
+- Sync client (`ImdbClient`) and async client (`AsyncImdbClient`)
+- Typed dataclass responses with full type hints
+- 55 CLI subcommands
+- Cursor pagination on search
+- Batch fetches (`get_titles`, `get_names`) in one request
+- Retries with exponential backoff
+- Optional in-memory cache
+- Custom exception hierarchy
+- One dependency: `httpx`
 
 ---
 
@@ -55,11 +65,12 @@ imdb person nm0000138
 
 | File | Content |
 |---|---|
-| [`docs/endpoints.md`](docs/endpoints.md) | All 56 endpoint methods with descriptions, signatures, return types |
+| [`docs/endpoints.md`](docs/endpoints.md) | All 56 endpoint methods with signatures and return types |
 | [`docs/cli.md`](docs/cli.md) | All 55 CLI subcommands and flags |
-| [`docs/development.md`](docs/development.md) | Configuration, exception handling, pagination, architecture |
+| [`docs/development.md`](docs/development.md) | Configuration, exceptions, pagination, architecture, models |
 
 ---
 
-#### for any reverse enginering work
-contact me t.me/etrnkz
+## Contact
+
+For reverse engineering work: [t.me/etrnkz](https://t.me/etrnkz)

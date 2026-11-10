@@ -43,7 +43,7 @@ with ImdbClient() as c:
     except ImdbNotFoundError:
         print("Not found")
     except ImdbRateLimitError:
-        print("Slow down!")
+        print("Rate limited")
 ```
 
 ---
