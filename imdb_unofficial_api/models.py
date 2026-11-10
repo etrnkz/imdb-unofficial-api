@@ -194,6 +194,58 @@ class WatchOptionItem:
 
 
 @dataclass
+class PlotSummary:
+    id: Optional[str] = None
+    plot_type: Optional[str] = None
+    text: Optional[str] = None
+    author: Optional[str] = None
+    language: Optional[str] = None
+    is_spoiler: bool = False
+
+
+@dataclass
+class TitleImage:
+    id: Optional[str] = None
+    url: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    caption: Optional[str] = None
+    type: Optional[str] = None
+
+
+@dataclass
+class SoundtrackTrack:
+    id: Optional[str] = None
+    text: Optional[str] = None
+
+
+@dataclass
+class TitleConnection:
+    category_id: Optional[str] = None
+    category_text: Optional[str] = None
+    title_id: Optional[str] = None
+    title_name: Optional[str] = None
+    title_year: Optional[int] = None
+    description: Optional[str] = None
+
+
+@dataclass
+class TitleAka:
+    text: Optional[str] = None
+    country: Optional[str] = None
+    language: Optional[str] = None
+    attributes: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ExternalLink:
+    url: Optional[str] = None
+    label: Optional[str] = None
+    category: Optional[str] = None
+    category_id: Optional[str] = None
+
+
+@dataclass
 class SearchResult:
     id: Optional[str] = None
     title: Optional[str] = None

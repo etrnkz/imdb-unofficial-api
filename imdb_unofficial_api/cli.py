@@ -267,6 +267,62 @@ def cmd_awards(args):
                 print(f"       {a.notes[:150]}")
 
 
+def cmd_plots(args):
+    with ImdbClient() as client:
+        items = client.get_title_plots(args.id)
+        print(f"Plot Summaries ({len(items)}):")
+        for i, p in enumerate(items, 1):
+            print(f"\n  #{i} [{p.plot_type}] ({p.language}){' [SPOILER]' if p.is_spoiler else ''}")
+            print(f"    {p.text[:300]}")
+
+
+def cmd_images(args):
+    with ImdbClient() as client:
+        items = client.get_title_images(args.id)
+        print(f"Images ({len(items)}):")
+        for i, img in enumerate(items, 1):
+            print(f"  #{i} [{img.type}] {img.url}")
+            print(f"       {img.width}x{img.height}  caption: {(img.caption or '')[:80]}")
+
+
+def cmd_soundtrack(args):
+    with ImdbClient() as client:
+        items = client.get_title_soundtrack(args.id)
+        print(f"Soundtrack ({len(items)}):")
+        for i, s in enumerate(items, 1):
+            print(f"  #{i} {s.text} ({s.id})")
+
+
+def cmd_connections(args):
+    with ImdbClient() as client:
+        items = client.get_title_connections(args.id)
+        print(f"Connections ({len(items)}):")
+        for i, c in enumerate(items, 1):
+            year = f" ({c.title_year})" if c.title_year else ""
+            print(f"  #{i} [{c.category_text}] {c.title_name}{year}")
+            if c.description:
+                print(f"       {c.description[:150]}")
+
+
+def cmd_akas(args):
+    with ImdbClient() as client:
+        items = client.get_title_akas(args.id)
+        print(f"Alternative Titles ({len(items)}):")
+        for i, a in enumerate(items, 1):
+            attrs = ", ".join(a.attributes) if a.attributes else ""
+            attr_str = f" [{attrs}]" if attrs else ""
+            print(f"  #{i} {a.text} ({a.country or 'N/A'}){attr_str}")
+
+
+def cmd_external_links(args):
+    with ImdbClient() as client:
+        items = client.get_title_external_links(args.id)
+        print(f"External Links ({len(items)}):")
+        for i, lnk in enumerate(items, 1):
+            print(f"  #{i} [{lnk.category}] {lnk.label}")
+            print(f"       {lnk.url}")
+
+
 def cmd_watch(args):
     with ImdbClient() as client:
         wo = client.get_title_watch_options(args.id)
@@ -359,6 +415,24 @@ def main():
     p_wo = sub.add_parser("watch", help="Get watch options")
     p_wo.add_argument("id", help="IMDb ID")
 
+    p_plots = sub.add_parser("plots", help="Get plot summaries")
+    p_plots.add_argument("id", help="IMDb ID")
+
+    p_img = sub.add_parser("images", help="Get image gallery")
+    p_img.add_argument("id", help="IMDb ID")
+
+    p_snd = sub.add_parser("soundtrack", help="Get soundtrack tracks")
+    p_snd.add_argument("id", help="IMDb ID")
+
+    p_conn = sub.add_parser("connections", help="Get connected titles")
+    p_conn.add_argument("id", help="IMDb ID")
+
+    p_akas = sub.add_parser("akas", help="Get alternative titles")
+    p_akas.add_argument("id", help="IMDb ID")
+
+    p_ext = sub.add_parser("external-links", help="Get external links")
+    p_ext.add_argument("id", help="IMDb ID")
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -388,6 +462,12 @@ def main():
         "keywords": cmd_keywords,
         "awards": cmd_awards,
         "watch": cmd_watch,
+        "plots": cmd_plots,
+        "images": cmd_images,
+        "soundtrack": cmd_soundtrack,
+        "connections": cmd_connections,
+        "akas": cmd_akas,
+        "external-links": cmd_external_links,
     }
     commands[args.command](args)
 

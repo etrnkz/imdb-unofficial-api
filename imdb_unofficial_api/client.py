@@ -1,6 +1,6 @@
 import httpx
 from typing import Optional, Any
-from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem, BoxOffice, CompanyCreditItem, TechSpec, ReleaseDateItem, ParentsGuideItem, KeywordItem, AwardNomination, WatchOptionItem
+from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem, BoxOffice, CompanyCreditItem, TechSpec, ReleaseDateItem, ParentsGuideItem, KeywordItem, AwardNomination, WatchOptionItem, PlotSummary, TitleImage, SoundtrackTrack, TitleConnection, TitleAka, ExternalLink
 
 GRAPHQL_URL = "https://api.graphql.imdb.com/"
 
@@ -361,6 +361,56 @@ query GetExtras($id: ID!) {
         offerType
         link(platform: WEB)
         description { value }
+      }
+    }
+  }
+}
+"""
+
+GET_TITLE_INFO_QUERY = """
+query GetInfo($id: ID!) {
+  title(id: $id) {
+    id
+    plots(first: 5, includeAllLocales: true) {
+      edges {
+        node {
+          id plotType plotText { markdown } author language { id text } isSpoiler
+        }
+      }
+    }
+    images(first: 20) {
+      edges {
+        node {
+          id url width height caption { markdown } type
+        }
+      }
+    }
+    soundtrack(first: 20) {
+      edges {
+        node { text id }
+      }
+    }
+    connections(first: 20) {
+      edges {
+        node {
+          category { id text }
+          associatedTitle { id titleText { text } releaseYear { year } }
+          description { markdown }
+        }
+      }
+    }
+    akas(first: 20) {
+      edges {
+        node {
+          text country { text } language { text } attributes { text }
+        }
+      }
+    }
+    externalLinks(first: 20) {
+      edges {
+        node {
+          url label externalLinkCategory { id text }
+        }
       }
     }
   }
@@ -1045,6 +1095,93 @@ query GetPopular($limit: Int!) {
             link=wo.get("link"),
             description=wo.get("description", {}).get("value"),
         )
+
+    def get_title_plots(self, title_id: str) -> list[PlotSummary]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_INFO_QUERY, {"id": tid}, "GetInfo")
+        items: list[PlotSummary] = []
+        for edge in data.get("title", {}).get("plots", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(PlotSummary(
+                id=n.get("id"),
+                plot_type=n.get("plotType"),
+                text=n.get("plotText", {}).get("markdown"),
+                author=n.get("author"),
+                language=n.get("language", {}).get("text"),
+                is_spoiler=n.get("isSpoiler", False),
+            ))
+        return items
+
+    def get_title_images(self, title_id: str) -> list[TitleImage]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_INFO_QUERY, {"id": tid}, "GetInfo")
+        items: list[TitleImage] = []
+        for edge in data.get("title", {}).get("images", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(TitleImage(
+                id=n.get("id"),
+                url=n.get("url"),
+                width=n.get("width"),
+                height=n.get("height"),
+                caption=n.get("caption", {}).get("markdown"),
+                type=n.get("type"),
+            ))
+        return items
+
+    def get_title_soundtrack(self, title_id: str) -> list[SoundtrackTrack]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_INFO_QUERY, {"id": tid}, "GetInfo")
+        items: list[SoundtrackTrack] = []
+        for edge in data.get("title", {}).get("soundtrack", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(SoundtrackTrack(id=n.get("id"), text=n.get("text")))
+        return items
+
+    def get_title_connections(self, title_id: str) -> list[TitleConnection]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_INFO_QUERY, {"id": tid}, "GetInfo")
+        items: list[TitleConnection] = []
+        for edge in data.get("title", {}).get("connections", {}).get("edges", []):
+            n = edge.get("node", {})
+            at = n.get("associatedTitle", {})
+            items.append(TitleConnection(
+                category_id=n.get("category", {}).get("id"),
+                category_text=n.get("category", {}).get("text"),
+                title_id=at.get("id"),
+                title_name=at.get("titleText", {}).get("text"),
+                title_year=at.get("releaseYear", {}).get("year"),
+                description=n.get("description", {}).get("markdown"),
+            ))
+        return items
+
+    def get_title_akas(self, title_id: str) -> list[TitleAka]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_INFO_QUERY, {"id": tid}, "GetInfo")
+        items: list[TitleAka] = []
+        for edge in data.get("title", {}).get("akas", {}).get("edges", []):
+            n = edge.get("node", {})
+            attrs = [a.get("text", "") for a in n.get("attributes", []) if a.get("text")]
+            items.append(TitleAka(
+                text=n.get("text"),
+                country=n.get("country", {}).get("text"),
+                language=n.get("language", {}).get("text") if n.get("language") else None,
+                attributes=attrs,
+            ))
+        return items
+
+    def get_title_external_links(self, title_id: str) -> list[ExternalLink]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_INFO_QUERY, {"id": tid}, "GetInfo")
+        items: list[ExternalLink] = []
+        for edge in data.get("title", {}).get("externalLinks", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(ExternalLink(
+                url=n.get("url"),
+                label=n.get("label"),
+                category=n.get("externalLinkCategory", {}).get("text"),
+                category_id=n.get("externalLinkCategory", {}).get("id"),
+            ))
+        return items
 
     def close(self):
         self._client.close()
