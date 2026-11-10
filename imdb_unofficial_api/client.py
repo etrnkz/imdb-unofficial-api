@@ -87,6 +87,24 @@ query Search($searchTerm: String!, $first: Int!) {
 }
 """
 
+PERSON_SEARCH_QUERY = """
+query SearchPerson($searchTerm: String!, $first: Int!) {
+  mainSearch(first: $first, options: {searchTerm: $searchTerm, type: NAME, includeAdult: true}) {
+    edges {
+      node {
+        entity {
+          ... on Name {
+            id
+            nameText { text }
+            primaryImage { url width height }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
 GET_NAME_QUERY = """
 query GetName($id: ID!) {
   name(id: $id) {
@@ -692,6 +710,58 @@ class ImdbClient:
 
         return t
 
+    def get_titles(self, *ids: str) -> list[Title]:
+        parts: list[str] = []
+        title_ids: list[str] = []
+        for i, tid in enumerate(ids):
+            tid_norm = tid if tid.startswith("tt") else f"tt{tid}"
+            title_ids.append(tid_norm)
+            parts.append(
+                f"t{i}: title(id: \"{tid_norm}\") {{ id titleText {{ text }} titleType {{ text }} "
+                f"releaseYear {{ year }} ratingsSummary {{ aggregateRating }} primaryImage {{ url }} }}"
+            )
+        if not parts:
+            return []
+        q = "{{ {} }}".format(" ".join(parts))
+        data = self._graphql(q, {})
+        results: list[Title] = []
+        for i in range(len(ids)):
+            node = data.get(f"t{i}")
+            if not node:
+                continue
+            t = Title(id=node.get("id"), title=node.get("titleText", {}).get("text"))
+            t.title_type = node.get("titleType", {}).get("text")
+            t.release_year = node.get("releaseYear", {}).get("year")
+            t.poster_url = node.get("primaryImage", {}).get("url")
+            rs = node.get("ratingsSummary")
+            if rs:
+                t.rating = Rating(aggregate_rating=rs.get("aggregateRating") or 0.0)
+            results.append(t)
+        return results
+
+    def get_names(self, *ids: str) -> list[Name]:
+        parts: list[str] = []
+        name_ids: list[str] = []
+        for i, nid in enumerate(ids):
+            nid_norm = nid if nid.startswith("nm") else f"nm{nid}"
+            name_ids.append(nid_norm)
+            parts.append(
+                f"n{i}: name(id: \"{nid_norm}\") {{ id nameText {{ text }} primaryImage {{ url }} }}"
+            )
+        if not parts:
+            return []
+        q = "{{ {} }}".format(" ".join(parts))
+        data = self._graphql(q, {})
+        results: list[Name] = []
+        for i in range(len(ids)):
+            node = data.get(f"n{i}")
+            if not node:
+                continue
+            n = Name(id=node.get("id"), name=node.get("nameText", {}).get("text"))
+            n.image_url = node.get("primaryImage", {}).get("url")
+            results.append(n)
+        return results
+
     def search(self, query: str, first: int = 20) -> list[SearchResult]:
         data = self._graphql(SEARCH_QUERY, {"searchTerm": query, "first": first}, "Search")
         results: list[SearchResult] = []
@@ -772,6 +842,21 @@ class ImdbClient:
             if rs:
                 sr.rating = rs.get("aggregateRating")
             results.append(sr)
+        return results
+
+    def search_person(self, query: str, first: int = 20) -> list[SearchResult]:
+        data = self._graphql(PERSON_SEARCH_QUERY, {"searchTerm": query, "first": first}, "SearchPerson")
+        results: list[SearchResult] = []
+        edges = data.get("mainSearch", {}).get("edges", [])
+        for edge in edges:
+            node = edge.get("node", {}).get("entity", {})
+            if not node.get("id"):
+                continue
+            results.append(SearchResult(
+                id=node.get("id"),
+                title=node.get("nameText", {}).get("text"),
+                image_url=(node.get("primaryImage") or {}).get("url"),
+            ))
         return results
 
     def get_name(self, name_id: str) -> Optional[Name]:
