@@ -199,6 +199,24 @@ def cmd_name_trademarks(args):
             print(f"  #{i}: {t.text[:200]}")
 
 
+def cmd_name_known_for(args):
+    with ImdbClient() as client:
+        titles = client.get_name_known_for(args.id, first=args.first or 12)
+        print(f"Known For ({len(titles)}):")
+        for t in titles:
+            r = t.rating.aggregate_rating if t.rating else "N/A"
+            print(f"  {r:>3}  {t.title} ({t.release_year or 'N/A'}) [{t.title_type}]")
+
+
+def cmd_name_filmography_titles(args):
+    with ImdbClient() as client:
+        titles = client.get_name_filmography_titles(args.id, first=args.first or 25)
+        print(f"Filmography ({len(titles)}):")
+        for t in titles:
+            r = t.rating.aggregate_rating if t.rating else "N/A"
+            print(f"  {r:>3}  {t.title} ({t.release_year or 'N/A'}) [{t.title_type}]")
+
+
 def cmd_cast(args):
     with ImdbClient() as client:
         cast = client.get_title_cast(args.id)
@@ -775,6 +793,14 @@ def main():
     p_ntm = sub.add_parser("name-trademarks", help="Get person's trademarks")
     p_ntm.add_argument("id", help="IMDb ID")
 
+    p_nkf = sub.add_parser("name-known-for", help="Get person's known-for titles")
+    p_nkf.add_argument("id", help="IMDb ID")
+    p_nkf.add_argument("--first", type=int, default=12)
+
+    p_nft = sub.add_parser("name-filmography", help="Get person's filmography titles")
+    p_nft.add_argument("id", help="IMDb ID")
+    p_nft.add_argument("--first", type=int, default=25)
+
     p_bt = sub.add_parser("get-titles", help="Batch fetch titles")
     p_bt.add_argument("ids", nargs="+", help="IMDb ID(s)")
 
@@ -854,6 +880,8 @@ def main():
         "name-trivia": cmd_name_trivia,
         "name-quotes": cmd_name_quotes,
         "name-trademarks": cmd_name_trademarks,
+        "name-known-for": cmd_name_known_for,
+        "name-filmography": cmd_name_filmography_titles,
         "get-titles": cmd_get_titles,
         "get-names": cmd_get_names,
         "search-person": cmd_search_person,

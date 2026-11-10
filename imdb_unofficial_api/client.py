@@ -108,6 +108,32 @@ query SearchPerson($searchTerm: String!, $first: Int!, $after: String) {
 }
 """
 
+GET_NAME_KNOWN_FOR_QUERY = """
+query GetNameKnownFor($id: ID!, $first: Int!) {
+  name(id: $id) {
+    id
+    nameText { text }
+    primaryImage { url }
+    knownFor(first: $first) {
+      edges {
+        node {
+          ... on NameKnownFor {
+            title {
+              id
+              titleText { text }
+              titleType { text }
+              releaseYear { year }
+              ratingsSummary { aggregateRating }
+              primaryImage { url }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
 GET_NAME_QUERY = """
 query GetName($id: ID!) {
   name(id: $id) {
@@ -1710,6 +1736,31 @@ query GetPopular($limit: Int!) {
             n = edge.get("node", {})
             items.append(NameTrademark(text=n.get("text", {}).get("markdown")))
         return items
+
+    def get_name_known_for(self, name_id: str, first: int = 12) -> list[Title]:
+        nid = name_id if name_id.startswith("nm") else f"nm{name_id}"
+        data = self._graphql(GET_NAME_KNOWN_FOR_QUERY, {"id": nid, "first": first}, "GetNameKnownFor")
+        name_node = data.get("name", {})
+        results: list[Title] = []
+        for edge in name_node.get("knownFor", {}).get("edges", []):
+            t = edge.get("node", {}).get("title", {})
+            if not t.get("id"):
+                continue
+            title = Title(id=t.get("id"), title=t.get("titleText", {}).get("text"))
+            title.title_type = t.get("titleType", {}).get("text")
+            title.release_year = t.get("releaseYear", {}).get("year")
+            title.poster_url = t.get("primaryImage", {}).get("url")
+            rs = t.get("ratingsSummary")
+            if rs:
+                title.rating = Rating(aggregate_rating=rs.get("aggregateRating") or 0.0)
+            results.append(title)
+        return results
+
+    def get_name_filmography_titles(self, name_id: str, first: int = 25) -> list[Title]:
+        n = self.get_name(name_id)
+        if not n:
+            return []
+        return n.filmography[:first]
 
     def close(self):
         self._client.close()
