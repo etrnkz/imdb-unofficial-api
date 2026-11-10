@@ -131,6 +131,69 @@ class GoofItem:
 
 
 @dataclass
+class BoxOffice:
+    budget: Optional[int] = None
+    budget_currency: Optional[str] = None
+    lifetime_gross: Optional[int] = None
+    lifetime_currency: Optional[str] = None
+    opening_weekend_gross: Optional[int] = None
+    opening_weekend_currency: Optional[str] = None
+    opening_theaters: Optional[int] = None
+
+
+@dataclass
+class CompanyCreditItem:
+    category: Optional[str] = None
+    company_id: Optional[str] = None
+    company_name: Optional[str] = None
+
+
+@dataclass
+class TechSpec:
+    aspect_ratios: list[str] = field(default_factory=list)
+    sound_mixes: list[str] = field(default_factory=list)
+    colorations: list[str] = field(default_factory=list)
+    cameras: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ReleaseDateItem:
+    country: Optional[str] = None
+    day: Optional[int] = None
+    month: Optional[int] = None
+    year: Optional[int] = None
+    attributes: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ParentsGuideItem:
+    category: Optional[str] = None
+    text: Optional[str] = None
+
+
+@dataclass
+class KeywordItem:
+    text: Optional[str] = None
+    legacy_id: Optional[str] = None
+
+
+@dataclass
+class AwardNomination:
+    is_winner: bool = False
+    award_name: Optional[str] = None
+    category: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@dataclass
+class WatchOptionItem:
+    provider: Optional[str] = None
+    offer_type: Optional[str] = None
+    link: Optional[str] = None
+    description: Optional[str] = None
+
+
+@dataclass
 class SearchResult:
     id: Optional[str] = None
     title: Optional[str] = None

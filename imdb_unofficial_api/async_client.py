@@ -1,6 +1,6 @@
 import httpx
 from typing import Optional, Any
-from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem
+from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem, BoxOffice, CompanyCreditItem, TechSpec, ReleaseDateItem, ParentsGuideItem, KeywordItem, AwardNomination, WatchOptionItem
 
 GRAPHQL_URL = "https://api.graphql.imdb.com/"
 
@@ -20,6 +20,7 @@ from .client import (
     GET_TITLE_FULL_CREDITS_QUERY, GET_TITLE_CREDITS_BY_CATEGORY,
     GET_TITLE_SEASONS_QUERY, GET_TITLE_EPISODES_QUERY,
     GET_TITLE_REVIEWS_QUERY, GET_TITLE_MEDIA_QUERY, ADVANCED_SEARCH_QUERY_BASE,
+    GET_TITLE_EXTRAS_QUERY,
 )
 
 
@@ -377,6 +378,124 @@ query GetPopular($limit: Int!) {
                 "attributes": attrs,
             })
         return items
+
+    async def get_title_box_office(self, title_id: str) -> Optional[BoxOffice]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_EXTRAS_QUERY, {"id": tid}, "GetExtras")
+        t = data.get("title", {})
+        bo = BoxOffice()
+        if t.get("productionBudget", {}).get("budget"):
+            bo.budget = t["productionBudget"]["budget"].get("amount")
+            bo.budget_currency = t["productionBudget"]["budget"].get("currency")
+        if t.get("lifetimeGross", {}).get("total"):
+            bo.lifetime_gross = t["lifetimeGross"]["total"].get("amount")
+            bo.lifetime_currency = t["lifetimeGross"]["total"].get("currency")
+        if t.get("openingWeekendGross", {}).get("gross", {}).get("total"):
+            bo.opening_weekend_gross = t["openingWeekendGross"]["gross"]["total"].get("amount")
+            bo.opening_weekend_currency = t["openingWeekendGross"]["gross"]["total"].get("currency")
+            bo.opening_theaters = t["openingWeekendGross"].get("theaterCount")
+        return bo
+
+    async def get_title_company_credits(self, title_id: str) -> list[CompanyCreditItem]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_EXTRAS_QUERY, {"id": tid}, "GetExtras")
+        items: list[CompanyCreditItem] = []
+        for edge in data.get("title", {}).get("companyCredits", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(CompanyCreditItem(
+                category=n.get("category", {}).get("text"),
+                company_id=n.get("company", {}).get("id"),
+                company_name=n.get("company", {}).get("companyText", {}).get("text"),
+            ))
+        return items
+
+    async def get_title_tech_specs(self, title_id: str) -> TechSpec:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_EXTRAS_QUERY, {"id": tid}, "GetExtras")
+        ts_data = data.get("title", {}).get("technicalSpecifications", {})
+        ts = TechSpec()
+        for item in ts_data.get("aspectRatios", {}).get("items", []):
+            if item.get("aspectRatio"):
+                ts.aspect_ratios.append(item["aspectRatio"])
+        for item in ts_data.get("soundMixes", {}).get("items", []):
+            if item.get("text"):
+                ts.sound_mixes.append(item["text"])
+        for item in ts_data.get("colorations", {}).get("items", []):
+            if item.get("text"):
+                ts.colorations.append(item["text"])
+        for item in ts_data.get("cameras", {}).get("items", []):
+            if item.get("camera"):
+                ts.cameras.append(item["camera"])
+        return ts
+
+    async def get_title_release_dates(self, title_id: str) -> list[ReleaseDateItem]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_EXTRAS_QUERY, {"id": tid}, "GetExtras")
+        items: list[ReleaseDateItem] = []
+        for edge in data.get("title", {}).get("releaseDates", {}).get("edges", []):
+            n = edge.get("node", {})
+            attrs = [a.get("text", "") for a in n.get("attributes", []) if a.get("text")]
+            items.append(ReleaseDateItem(
+                country=n.get("country", {}).get("text"),
+                day=n.get("day"),
+                month=n.get("month"),
+                year=n.get("year"),
+                attributes=attrs,
+            ))
+        return items
+
+    async def get_title_parents_guide(self, title_id: str) -> list[ParentsGuideItem]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_EXTRAS_QUERY, {"id": tid}, "GetExtras")
+        items: list[ParentsGuideItem] = []
+        for edge in data.get("title", {}).get("parentsGuide", {}).get("guideItems", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(ParentsGuideItem(
+                category=n.get("category", {}).get("id"),
+                text=n.get("text", {}).get("markdown"),
+            ))
+        return items
+
+    async def get_title_keywords(self, title_id: str) -> list[KeywordItem]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_EXTRAS_QUERY, {"id": tid}, "GetExtras")
+        items: list[KeywordItem] = []
+        for edge in data.get("title", {}).get("keywords", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(KeywordItem(
+                text=n.get("keyword", {}).get("text", {}).get("text"),
+                legacy_id=n.get("legacyId"),
+            ))
+        return items
+
+    async def get_title_awards(self, title_id: str) -> list[AwardNomination]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_EXTRAS_QUERY, {"id": tid}, "GetExtras")
+        items: list[AwardNomination] = []
+        for edge in data.get("title", {}).get("awardNominations", {}).get("edges", []):
+            n = edge.get("node", {})
+            cat = n.get("category") or {}
+            notes = n.get("notes")
+            items.append(AwardNomination(
+                is_winner=n.get("isWinner", False),
+                award_name=(n.get("award") or {}).get("text"),
+                category=cat.get("text"),
+                notes=notes.get("markdown") if notes else None,
+            ))
+        return items
+
+    async def get_title_watch_options(self, title_id: str) -> Optional[WatchOptionItem]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = await self._graphql(GET_TITLE_EXTRAS_QUERY, {"id": tid}, "GetExtras")
+        wo = data.get("title", {}).get("primaryWatchOption", {}).get("watchOption")
+        if not wo:
+            return None
+        return WatchOptionItem(
+            provider=wo.get("provider", {}).get("name", {}).get("value"),
+            offer_type=wo.get("offerType"),
+            link=wo.get("link"),
+            description=wo.get("description", {}).get("value"),
+        )
 
     async def close(self):
         await self._client.aclose()
