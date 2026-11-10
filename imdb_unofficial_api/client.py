@@ -1,6 +1,6 @@
 import httpx
 from typing import Optional, Any
-from .models import Title, Name, SearchResult, Rating, Credit
+from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview
 
 GRAPHQL_URL = "https://api.graphql.imdb.com/"
 
@@ -45,6 +45,12 @@ query GetTitle($id: ID!) {
           primaryImage { url width height }
           releaseYear { year }
         }
+      }
+    }
+    series {
+      displayableEpisodeNumber {
+        episodeNumber { episodeNumber text }
+        displayableSeason { season text }
       }
     }
     principalCredits {
@@ -117,18 +123,21 @@ query GetName($id: ID!) {
 }
 """
 
-ADVANCED_SEARCH_QUERY = """
-query AdvancedSearch($query: String!, $first: Int!) {
-  advancedTitleSearch(query: $query, first: $first) {
+ADVANCED_SEARCH_QUERY_BASE = """
+query AdvancedSearch($first: Int!) {
+  advancedTitleSearch(first: $first{CONSTRAINTS}) {
+    total
     edges {
       node {
-        id
-        titleText { text }
-        originalTitleText { text }
-        titleType { text }
-        releaseYear { year }
-        primaryImage { url width height }
-        ratingsSummary { aggregateRating }
+        title {
+          id
+          titleText { text }
+          originalTitleText { text }
+          titleType { text }
+          releaseYear { year }
+          primaryImage { url }
+          ratingsSummary { aggregateRating }
+        }
       }
     }
   }
@@ -146,6 +155,94 @@ query GetFullCredits($id: ID!) {
             characters { name }
             attributes { text }
           }
+        }
+      }
+    }
+  }
+}
+"""
+
+GET_TITLE_SEASONS_QUERY = """
+query GetSeasons($id: ID!) {
+  title(id: $id) {
+    episodes {
+      displayableSeasons(first: 30) {
+        total
+        edges {
+          node {
+            season
+            text
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+GET_TITLE_EPISODES_QUERY = """
+query GetEpisodes($id: ID!, $first: Int!, $seasons: [String!]!) {
+  title(id: $id) {
+    episodes {
+      episodes(first: $first, filter: {includeSeasons: $seasons}) {
+        total
+        edges {
+          node {
+            id
+            titleText { text }
+            releaseYear { year }
+            ratingsSummary { aggregateRating voteCount }
+            primaryImage { url }
+            series {
+              displayableEpisodeNumber {
+                episodeNumber { episodeNumber text }
+                displayableSeason { season text }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+GET_TITLE_REVIEWS_QUERY = """
+query GetReviews($id: ID!) {
+  title(id: $id) {
+    id
+    titleText { text }
+    reviewSummary {
+      overall { long { value { markdown } } }
+      positive { long { value { markdown } } }
+      negative { long { value { markdown } } }
+    }
+    metacritic {
+      metascore { score reviewCount }
+      reviews(first: 20) {
+        edges {
+          node {
+            score
+            reviewer
+            quote { value }
+            site
+            url
+          }
+        }
+      }
+    }
+      reviews(first: 10) {
+      total
+      edges {
+        node {
+          id
+          authorRating
+          spoiler
+          summary { originalText }
+          text { originalText { markdown } }
+          author { username { text } }
+          helpfulness { upVotes downVotes score }
+          submissionDate
         }
       }
     }
@@ -288,6 +385,16 @@ class ImdbClient:
                     )
                 t.recommendations.append(rec)
 
+        if d.get("series") and d["series"].get("displayableEpisodeNumber"):
+            den = d["series"]["displayableEpisodeNumber"]
+            ei = EpisodeInfo()
+            if den.get("displayableSeason"):
+                ei.season_number = den["displayableSeason"].get("season")
+            if den.get("episodeNumber"):
+                ei.episode_number = den["episodeNumber"].get("episodeNumber")
+                ei.text = den["episodeNumber"].get("text")
+            t.episode_info = ei
+
         if d.get("principalCredits"):
             for pc in d["principalCredits"]:
                 if not pc.get("credits"):
@@ -328,6 +435,65 @@ class ImdbClient:
                 if rs:
                     sr.rating = rs.get("aggregateRating")
                 results.append(sr)
+        return results
+
+    def search_advanced(
+        self,
+        query: Optional[str] = None,
+        first: int = 20,
+        title_type: Optional[str] = None,
+        genre_ids: Optional[str] = None,
+        min_rating: Optional[float] = None,
+        release_date_start: Optional[str] = None,
+        release_date_end: Optional[str] = None,
+        min_runtime: Optional[int] = None,
+        max_runtime: Optional[int] = None,
+    ) -> list[SearchResult]:
+        constraints_parts: list[str] = []
+        if query:
+            constraints_parts.append(f'titleTextConstraint: {{searchTerm: "{query}", useFuzzySearch: true}}')
+        if title_type:
+            constraints_parts.append(f'titleTypeConstraint: {{anyTitleTypeIds: "{title_type}"}}')
+        if genre_ids:
+            constraints_parts.append(f'genreConstraint: {{anyGenreIds: "{genre_ids}"}}')
+        if min_rating is not None:
+            constraints_parts.append(f'userRatingsConstraint: {{aggregateRatingRange: {{min: {min_rating}}}}}')
+        if release_date_start or release_date_end:
+            d = []
+            if release_date_start: d.append(f'start: "{release_date_start}"')
+            if release_date_end: d.append(f'end: "{release_date_end}"')
+            constraints_parts.append(f'releaseDateConstraint: {{releaseDateRange: {{{",".join(d)}}}}}')
+        if min_runtime is not None or max_runtime is not None:
+            d = []
+            if min_runtime is not None: d.append(f'min: {min_runtime}')
+            if max_runtime is not None: d.append(f'max: {max_runtime}')
+            constraints_parts.append(f'runtimeConstraint: {{runtimeRangeMinutes: {{{",".join(d)}}}}}')
+
+        if constraints_parts:
+            constraints_str = ", constraints:{" + ",".join(constraints_parts) + "}"
+            query_str = ADVANCED_SEARCH_QUERY_BASE.replace("{CONSTRAINTS}", constraints_str)
+        else:
+            query_str = ADVANCED_SEARCH_QUERY_BASE.replace("{CONSTRAINTS}", "")
+        data = self._graphql(query_str, {"first": first}, "AdvancedSearch")
+
+        results: list[SearchResult] = []
+        edges = data.get("advancedTitleSearch", {}).get("edges", [])
+        for edge in edges:
+            node = edge.get("node", {}).get("title", {})
+            if not node.get("id"):
+                continue
+            sr = SearchResult(
+                id=node.get("id"),
+                title=node.get("titleText", {}).get("text"),
+                original_title=node.get("originalTitleText", {}).get("text"),
+                title_type=node.get("titleType", {}).get("text"),
+                year=(node.get("releaseYear") or {}).get("year"),
+                image_url=(node.get("primaryImage") or {}).get("url"),
+            )
+            rs = node.get("ratingsSummary")
+            if rs:
+                sr.rating = rs.get("aggregateRating")
+            results.append(sr)
         return results
 
     def get_name(self, name_id: str) -> Optional[Name]:
@@ -411,6 +577,172 @@ class ImdbClient:
                 c.attributes = [attr.get("text", "") for attr in node["attributes"] if attr.get("text")]
             credits.append(c)
         return credits
+
+    def get_title_seasons(self, title_id: str) -> list[Season]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_SEASONS_QUERY, {"id": tid}, "GetSeasons")
+        seasons: list[Season] = []
+        edges = data.get("title", {}).get("episodes", {}).get("displayableSeasons", {}).get("edges", [])
+        for edge in edges:
+            node = edge.get("node", {})
+            seasons.append(Season(
+                season_number=node.get("season"),
+                text=node.get("text"),
+            ))
+        return seasons
+
+    def get_title_episodes(
+        self, title_id: str, season: Optional[str] = None, first: int = 50
+    ) -> list[Title]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        seasons_filter = [season] if season else ["1"]
+        data = self._graphql(
+            GET_TITLE_EPISODES_QUERY,
+            {"id": tid, "first": first, "seasons": seasons_filter},
+            "GetEpisodes",
+        )
+        episodes: list[Title] = []
+        edges = data.get("title", {}).get("episodes", {}).get("episodes", {}).get("edges", [])
+        for edge in edges:
+            node = edge.get("node", {})
+            t = Title(
+                id=node.get("id"),
+                title=node.get("titleText", {}).get("text"),
+                release_year=node.get("releaseYear", {}).get("year"),
+                poster_url=node.get("primaryImage", {}).get("url"),
+            )
+            if node.get("ratingsSummary"):
+                t.rating = Rating(
+                    aggregate_rating=node["ratingsSummary"].get("aggregateRating") or 0.0,
+                    vote_count=node["ratingsSummary"].get("voteCount") or 0,
+                )
+            if node.get("series") and node["series"].get("displayableEpisodeNumber"):
+                den = node["series"]["displayableEpisodeNumber"]
+                ei = EpisodeInfo()
+                if den.get("displayableSeason"):
+                    ei.season_number = den["displayableSeason"].get("season")
+                if den.get("episodeNumber"):
+                    ei.episode_number = den["episodeNumber"].get("episodeNumber")
+                    ei.text = den["episodeNumber"].get("text")
+                t.episode_info = ei
+            episodes.append(t)
+        return episodes
+
+    def get_title_reviews(self, title_id: str) -> tuple[list[UserReview], list[MetacriticReview], Optional[int]]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_REVIEWS_QUERY, {"id": tid}, "GetReviews")
+        title_data = data.get("title", {})
+
+        metacritic_score: Optional[int] = None
+        mc = title_data.get("metacritic", {})
+        if mc.get("metascore"):
+            metacritic_score = mc["metascore"].get("score")
+
+        metacritic_reviews: list[MetacriticReview] = []
+        for edge in mc.get("reviews", {}).get("edges", []):
+            n = edge.get("node", {})
+            metacritic_reviews.append(MetacriticReview(
+                score=n.get("score"),
+                reviewer=n.get("reviewer"),
+                quote=n.get("quote", {}).get("value"),
+                site=n.get("site"),
+                url=n.get("url"),
+            ))
+
+        user_reviews: list[UserReview] = []
+        for edge in title_data.get("reviews", {}).get("edges", []):
+            n = edge.get("node", {})
+            h = n.get("helpfulness", {})
+            user_reviews.append(UserReview(
+                id=n.get("id"),
+                author=n.get("author", {}).get("username", {}).get("text"),
+                author_rating=n.get("authorRating"),
+                summary=n.get("summary", {}).get("originalText"),
+                text=n.get("text", {}).get("originalText", {}).get("markdown"),
+                spoiler=n.get("spoiler", False),
+                up_votes=h.get("upVotes", 0),
+                down_votes=h.get("downVotes", 0),
+                helpfulness_score=h.get("score"),
+                submission_date=n.get("submissionDate"),
+            ))
+
+        return user_reviews, metacritic_reviews, metacritic_score
+
+    def get_chart(self, chart_type: str, first: int = 50) -> list[Title]:
+        query_str = """
+query GetChart($first: Int!) {
+  chartTitles(first: $first, chart: {chartType: CHART_TYPE}) {
+    edges {
+      node {
+        id
+        titleText { text }
+        releaseYear { year }
+        ratingsSummary { aggregateRating voteCount topRanking { rank } }
+        primaryImage { url }
+        titleType { text }
+      }
+    }
+  }
+}
+""".replace("CHART_TYPE", chart_type)
+        data = self._graphql(query_str, {"first": first}, "GetChart")
+        return [self._parse_chart_title(edge.get("node", {})) for edge in data.get("chartTitles", {}).get("edges", [])]
+
+    def _parse_chart_title(self, node: dict) -> Title:
+        t = Title(id=node.get("id"))
+        if node.get("titleText"):
+            t.title = node["titleText"].get("text")
+        if node.get("titleType"):
+            t.title_type = node["titleType"].get("text")
+        if node.get("releaseYear"):
+            t.release_year = node["releaseYear"].get("year")
+        if node.get("primaryImage"):
+            t.poster_url = node["primaryImage"].get("url")
+        if node.get("ratingsSummary"):
+            rs = node["ratingsSummary"]
+            t.rating = Rating(
+                aggregate_rating=rs.get("aggregateRating") or 0.0,
+                vote_count=rs.get("voteCount") or 0,
+            )
+            if rs.get("topRanking"):
+                t.rating.top_rank = rs["topRanking"].get("rank")
+        return t
+
+    def get_trending(self, limit: int = 50) -> list[Title]:
+        query_str = """
+query GetTrending($limit: Int!) {
+  trendingTitles(limit: $limit) {
+    titles {
+      id
+      titleText { text }
+      releaseYear { year }
+      ratingsSummary { aggregateRating }
+      primaryImage { url }
+      titleType { text }
+    }
+  }
+}
+"""
+        data = self._graphql(query_str, {"limit": limit})
+        return [self._parse_chart_title(node) for node in data.get("trendingTitles", {}).get("titles", [])]
+
+    def get_popular(self, limit: int = 50) -> list[Title]:
+        query_str = """
+query GetPopular($limit: Int!) {
+  popularTitles(limit: $limit) {
+    titles {
+      id
+      titleText { text }
+      releaseYear { year }
+      ratingsSummary { aggregateRating }
+      primaryImage { url }
+      titleType { text }
+    }
+  }
+}
+"""
+        data = self._graphql(query_str, {"limit": limit})
+        return [self._parse_chart_title(node) for node in data.get("popularTitles", {}).get("titles", [])]
 
     def close(self):
         self._client.close()
