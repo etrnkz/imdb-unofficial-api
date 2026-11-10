@@ -2,6 +2,8 @@ import httpx
 import asyncio
 import time
 from typing import Optional, Any
+from .exceptions import ImdbError, ImdbNotFoundError, ImdbRateLimitError, ImdbGraphQLError
+from .exceptions import ImdbError, ImdbNotFoundError, ImdbRateLimitError, ImdbGraphQLError
 from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem, BoxOffice, CompanyCreditItem, TechSpec, ReleaseDateItem, ParentsGuideItem, KeywordItem, AwardNomination, WatchOptionItem, PlotSummary, TitleImage, SoundtrackTrack, TitleConnection, TitleAka, ExternalLink, CrazyCredit, FaqItem, NewsArticle, CertificateInfo, ProductionStatusInfo, EngagementStats, RatingHistogramEntry, TitleVideo, TitleMeta, InterestItem, RelatedList, NameHeight, NameAge, NameBirthDetails, NameDeathDetails, NameSpouse, NameAward, NameCredit, NameOtherWork, NameTriviaItem, NameQuoteItem, NameTrademark
 
 GRAPHQL_URL = "https://api.graphql.imdb.com/"
@@ -68,9 +70,9 @@ class AsyncImdbClient:
         for attempt in range(self._max_retries):
             resp = await self._client.post(GRAPHQL_URL, json=payload)
             if resp.status_code == 429:
-                wait = 2 ** attempt
-                await asyncio.sleep(wait)
-                continue
+                raise ImdbRateLimitError("Rate limited by IMDb API")
+            if resp.status_code == 404:
+                raise ImdbNotFoundError("Resource not found")
             resp.raise_for_status()
             data = resp.json()
 
@@ -82,14 +84,14 @@ class AsyncImdbClient:
                 if is_retriable and attempt < self._max_retries - 1:
                     await asyncio.sleep(2 ** attempt)
                     continue
-                raise RuntimeError(f"GraphQL error: {data['errors']}")
+                raise ImdbGraphQLError(str(data["errors"]))
 
             result = data.get("data", {})
             if self._cache_ttl > 0:
                 self._cache[ck] = (time.time(), result)
             return result
 
-        raise RuntimeError("Max retries exceeded")
+        raise ImdbError("Max retries exceeded")
 
     async def get_title(self, title_id: str) -> Optional[Title]:
         tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
@@ -410,6 +412,21 @@ query GetPopular($limit: Int!) {
         data = await self._graphql(query_str, {"limit": limit})
         from .client import ImdbClient
         return [ImdbClient._parse_chart_title(None, node) for node in data.get("popularTitles", {}).get("titles", [])]
+
+    async def get_top_rated_movies(self, first: int = 50) -> list[Title]:
+        return await self.get_chart("TOP_RATED_MOVIES", first)
+
+    async def get_top_rated_tv(self, first: int = 50) -> list[Title]:
+        return await self.get_chart("TOP_RATED_TV_SHOWS", first)
+
+    async def get_most_popular_movies(self, first: int = 50) -> list[Title]:
+        return await self.get_chart("MOST_POPULAR_MOVIES", first)
+
+    async def get_most_popular_tv(self, first: int = 50) -> list[Title]:
+        return await self.get_chart("MOST_POPULAR_TV_SHOWS", first)
+
+    async def get_lowest_rated_movies(self, first: int = 50) -> list[Title]:
+        return await self.get_chart("LOWEST_RATED_MOVIES", first)
 
     async def get_title_trailer(self, title_id: str) -> Optional[Trailer]:
         tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
