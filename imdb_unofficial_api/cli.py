@@ -140,6 +140,44 @@ def cmd_name_credits(args):
             print(f"  #{i} [{c.category}] {c.title_name} ({c.title_id})")
 
 
+def cmd_name_other_works(args):
+    with ImdbClient() as client:
+        items = client.get_name_other_works(args.id)
+        print(f"Other Works ({len(items)}):")
+        for i, w in enumerate(items, 1):
+            print(f"  #{i} [{w.category or 'N/A'}] {w.text[:200]}")
+
+
+def cmd_name_trivia(args):
+    with ImdbClient() as client:
+        items = client.get_name_trivia(args.id)
+        print(f"Trivia ({len(items)}):")
+        for i, t in enumerate(items, 1):
+            print(f"\n  #{i}: {t.text[:200]}")
+
+
+def cmd_name_quotes(args):
+    with ImdbClient() as client:
+        items = client.get_name_quotes(args.id)
+        print(f"Quotes ({len(items)}):")
+        for i, q in enumerate(items, 1):
+            print(f"\n  #{i}: {q.text[:200]}")
+
+
+def cmd_name_trademarks(args):
+    with ImdbClient() as client:
+        items = client.get_name_trademarks(args.id)
+        print(f"Trademarks ({len(items)}):")
+        for i, t in enumerate(items, 1):
+            print(f"  #{i}: {t.text[:200]}")
+
+    with ImdbClient() as client:
+        items = client.get_name_credits(args.id)
+        print(f"Credits ({len(items)}):")
+        for i, c in enumerate(items, 1):
+            print(f"  #{i} [{c.category}] {c.title_name} ({c.title_id})")
+
+
 def cmd_cast(args):
     with ImdbClient() as client:
         cast = client.get_title_cast(args.id)
@@ -669,6 +707,18 @@ def main():
     p_nc = sub.add_parser("name-credits", help="Get person's full credits")
     p_nc.add_argument("id", help="IMDb ID")
 
+    p_now = sub.add_parser("name-other-works", help="Get person's other works")
+    p_now.add_argument("id", help="IMDb ID")
+
+    p_nt = sub.add_parser("name-trivia", help="Get person's trivia")
+    p_nt.add_argument("id", help="IMDb ID")
+
+    p_nq = sub.add_parser("name-quotes", help="Get person's quotes")
+    p_nq.add_argument("id", help="IMDb ID")
+
+    p_ntm = sub.add_parser("name-trademarks", help="Get person's trademarks")
+    p_ntm.add_argument("id", help="IMDb ID")
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -724,6 +774,10 @@ def main():
         "name-awards": cmd_name_awards,
         "name-images": cmd_name_images,
         "name-credits": cmd_name_credits,
+        "name-other-works": cmd_name_other_works,
+        "name-trivia": cmd_name_trivia,
+        "name-quotes": cmd_name_quotes,
+        "name-trademarks": cmd_name_trademarks,
     }
     commands[args.command](args)
 

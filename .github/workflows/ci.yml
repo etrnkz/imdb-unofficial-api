@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install ruff mypy
+      - name: Lint with ruff
+        run: ruff check imdb_unofficial_api/
+      - name: Type check with mypy
+        run: mypy imdb_unofficial_api/ --ignore-missing-imports
+      - name: Test import
+        run: python -c "from imdb_unofficial_api import ImdbClient, AsyncImdbClient; print('OK')"
