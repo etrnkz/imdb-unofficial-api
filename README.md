@@ -61,6 +61,5 @@ imdb person nm0000138
 
 ---
 
-## License
-
-MIT
+#### for any reverse enginering work
+contact me t.me/etrnkz
