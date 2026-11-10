@@ -51,6 +51,12 @@ class AsyncImdbClient:
         self._cache: dict[str, tuple[float, dict]] = {}
         self._cache_ttl = cache_ttl
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        await self._client.aclose()
+
     def _cache_key(self, query: str, variables: dict) -> str:
         return f"{query}|{variables}"
 
@@ -151,7 +157,10 @@ class AsyncImdbClient:
         return results
 
     async def search(self, query: str, first: int = 20) -> list[SearchResult]:
-        data = await self._graphql(SEARCH_QUERY, {"searchTerm": query, "first": first}, "Search")
+        return (await self.search_page(query, first=first))[0]
+
+    async def search_page(self, query: str, first: int = 20, after: Optional[str] = None) -> tuple[list[SearchResult], Optional[str]]:
+        data = await self._graphql(SEARCH_QUERY, {"searchTerm": query, "first": first, "after": after}, "Search")
         results: list[SearchResult] = []
         for edge in data.get("mainSearch", {}).get("edges", []):
             node = edge.get("node", {}).get("entity", {})
@@ -169,7 +178,28 @@ class AsyncImdbClient:
             if rs:
                 sr.rating = rs.get("aggregateRating")
             results.append(sr)
-        return results
+        pi = data.get("mainSearch", {}).get("pageInfo", {})
+        cursor = pi.get("endCursor") if pi.get("hasNextPage") else None
+        return results, cursor
+
+    async def search_person(self, query: str, first: int = 20) -> list[SearchResult]:
+        return (await self.search_person_page(query, first=first))[0]
+
+    async def search_person_page(self, query: str, first: int = 20, after: Optional[str] = None) -> tuple[list[SearchResult], Optional[str]]:
+        data = await self._graphql(PERSON_SEARCH_QUERY, {"searchTerm": query, "first": first, "after": after}, "SearchPerson")
+        results: list[SearchResult] = []
+        for edge in data.get("mainSearch", {}).get("edges", []):
+            node = edge.get("node", {}).get("entity", {})
+            if not node.get("id"):
+                continue
+            results.append(SearchResult(
+                id=node.get("id"),
+                title=node.get("nameText", {}).get("text"),
+                image_url=(node.get("primaryImage") or {}).get("url"),
+            ))
+        pi = data.get("mainSearch", {}).get("pageInfo", {})
+        cursor = pi.get("endCursor") if pi.get("hasNextPage") else None
+        return results, cursor
 
     async def search_advanced(
         self,
@@ -183,6 +213,21 @@ class AsyncImdbClient:
         min_runtime: Optional[int] = None,
         max_runtime: Optional[int] = None,
     ) -> list[SearchResult]:
+        return (await self.search_advanced_page(query=query, first=first, title_type=title_type, genre_ids=genre_ids, min_rating=min_rating, release_date_start=release_date_start, release_date_end=release_date_end, min_runtime=min_runtime, max_runtime=max_runtime))[0]
+
+    async def search_advanced_page(
+        self,
+        query: Optional[str] = None,
+        first: int = 20,
+        after: Optional[str] = None,
+        title_type: Optional[str] = None,
+        genre_ids: Optional[str] = None,
+        min_rating: Optional[float] = None,
+        release_date_start: Optional[str] = None,
+        release_date_end: Optional[str] = None,
+        min_runtime: Optional[int] = None,
+        max_runtime: Optional[int] = None,
+    ) -> tuple[list[SearchResult], Optional[str]]:
         constraints_parts: list[str] = []
         if query:
             constraints_parts.append(f'titleTextConstraint: {{searchTerm: "{query}", useFuzzySearch: true}}')
@@ -209,7 +254,7 @@ class AsyncImdbClient:
         else:
             query_str = ADVANCED_SEARCH_QUERY_BASE.replace("{CONSTRAINTS}", "")
 
-        data = await self._graphql(query_str, {"first": first}, "AdvancedSearch")
+        data = await self._graphql(query_str, {"first": first, "after": after}, "AdvancedSearch")
         results: list[SearchResult] = []
         for edge in data.get("advancedTitleSearch", {}).get("edges", []):
             node = edge.get("node", {}).get("title", {})
@@ -227,10 +272,15 @@ class AsyncImdbClient:
             if rs:
                 sr.rating = rs.get("aggregateRating")
             results.append(sr)
-        return results
+        pi = data.get("advancedTitleSearch", {}).get("pageInfo", {})
+        cursor = pi.get("endCursor") if pi.get("hasNextPage") else None
+        return results, cursor
 
     async def search_person(self, query: str, first: int = 20) -> list[SearchResult]:
-        data = await self._graphql(PERSON_SEARCH_QUERY, {"searchTerm": query, "first": first}, "SearchPerson")
+        return (await self.search_person_page(query, first=first))[0]
+
+    async def search_person_page(self, query: str, first: int = 20, after: Optional[str] = None) -> tuple[list[SearchResult], Optional[str]]:
+        data = await self._graphql(PERSON_SEARCH_QUERY, {"searchTerm": query, "first": first, "after": after}, "SearchPerson")
         results: list[SearchResult] = []
         for edge in data.get("mainSearch", {}).get("edges", []):
             node = edge.get("node", {}).get("entity", {})
@@ -241,7 +291,9 @@ class AsyncImdbClient:
                 title=node.get("nameText", {}).get("text"),
                 image_url=(node.get("primaryImage") or {}).get("url"),
             ))
-        return results
+        pi = data.get("mainSearch", {}).get("pageInfo", {})
+        cursor = pi.get("endCursor") if pi.get("hasNextPage") else None
+        return results, cursor
 
     async def get_name(self, name_id: str) -> Optional[Name]:
         nid = name_id if name_id.startswith("nm") else f"nm{name_id}"

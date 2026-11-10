@@ -67,8 +67,8 @@ query GetTitle($id: ID!) {
 """
 
 SEARCH_QUERY = """
-query Search($searchTerm: String!, $first: Int!) {
-  mainSearch(first: $first, options: {searchTerm: $searchTerm, type: TITLE, includeAdult: true}) {
+query Search($searchTerm: String!, $first: Int!, $after: String) {
+  mainSearch(first: $first, after: $after, options: {searchTerm: $searchTerm, type: TITLE, includeAdult: true}) {
     edges {
       node {
         entity {
@@ -84,13 +84,14 @@ query Search($searchTerm: String!, $first: Int!) {
         }
       }
     }
+    pageInfo { hasNextPage endCursor }
   }
 }
 """
 
 PERSON_SEARCH_QUERY = """
-query SearchPerson($searchTerm: String!, $first: Int!) {
-  mainSearch(first: $first, options: {searchTerm: $searchTerm, type: NAME, includeAdult: true}) {
+query SearchPerson($searchTerm: String!, $first: Int!, $after: String) {
+  mainSearch(first: $first, after: $after, options: {searchTerm: $searchTerm, type: NAME, includeAdult: true}) {
     edges {
       node {
         entity {
@@ -102,6 +103,7 @@ query SearchPerson($searchTerm: String!, $first: Int!) {
         }
       }
     }
+    pageInfo { hasNextPage endCursor }
   }
 }
 """
@@ -176,8 +178,8 @@ query GetNameDetails($id: ID!) {
 """
 
 ADVANCED_SEARCH_QUERY_BASE = """
-query AdvancedSearch($first: Int!) {
-  advancedTitleSearch(first: $first{CONSTRAINTS}) {
+query AdvancedSearch($first: Int!, $after: String) {
+  advancedTitleSearch(first: $first, after: $after{CONSTRAINTS}) {
     total
     edges {
       node {
@@ -192,6 +194,7 @@ query AdvancedSearch($first: Int!) {
         }
       }
     }
+    pageInfo { hasNextPage endCursor }
   }
 }
 """
@@ -766,7 +769,10 @@ class ImdbClient:
         return results
 
     def search(self, query: str, first: int = 20) -> list[SearchResult]:
-        data = self._graphql(SEARCH_QUERY, {"searchTerm": query, "first": first}, "Search")
+        return self.search_page(query, first=first)[0]
+
+    def search_page(self, query: str, first: int = 20, after: Optional[str] = None) -> tuple[list[SearchResult], Optional[str]]:
+        data = self._graphql(SEARCH_QUERY, {"searchTerm": query, "first": first, "after": after}, "Search")
         results: list[SearchResult] = []
         edges = data.get("mainSearch", {}).get("edges", [])
         for edge in edges:
@@ -786,7 +792,29 @@ class ImdbClient:
                 if rs:
                     sr.rating = rs.get("aggregateRating")
                 results.append(sr)
-        return results
+        pi = data.get("mainSearch", {}).get("pageInfo", {})
+        cursor = pi.get("endCursor") if pi.get("hasNextPage") else None
+        return results, cursor
+
+    def search_person(self, query: str, first: int = 20) -> list[SearchResult]:
+        return self.search_person_page(query, first=first)[0]
+
+    def search_person_page(self, query: str, first: int = 20, after: Optional[str] = None) -> tuple[list[SearchResult], Optional[str]]:
+        data = self._graphql(PERSON_SEARCH_QUERY, {"searchTerm": query, "first": first, "after": after}, "SearchPerson")
+        results: list[SearchResult] = []
+        edges = data.get("mainSearch", {}).get("edges", [])
+        for edge in edges:
+            node = edge.get("node", {}).get("entity", {})
+            if not node.get("id"):
+                continue
+            results.append(SearchResult(
+                id=node.get("id"),
+                title=node.get("nameText", {}).get("text"),
+                image_url=(node.get("primaryImage") or {}).get("url"),
+            ))
+        pi = data.get("mainSearch", {}).get("pageInfo", {})
+        cursor = pi.get("endCursor") if pi.get("hasNextPage") else None
+        return results, cursor
 
     def search_advanced(
         self,
@@ -800,6 +828,21 @@ class ImdbClient:
         min_runtime: Optional[int] = None,
         max_runtime: Optional[int] = None,
     ) -> list[SearchResult]:
+        return self.search_advanced_page(query=query, first=first, title_type=title_type, genre_ids=genre_ids, min_rating=min_rating, release_date_start=release_date_start, release_date_end=release_date_end, min_runtime=min_runtime, max_runtime=max_runtime)[0]
+
+    def search_advanced_page(
+        self,
+        query: Optional[str] = None,
+        first: int = 20,
+        after: Optional[str] = None,
+        title_type: Optional[str] = None,
+        genre_ids: Optional[str] = None,
+        min_rating: Optional[float] = None,
+        release_date_start: Optional[str] = None,
+        release_date_end: Optional[str] = None,
+        min_runtime: Optional[int] = None,
+        max_runtime: Optional[int] = None,
+    ) -> tuple[list[SearchResult], Optional[str]]:
         constraints_parts: list[str] = []
         if query:
             constraints_parts.append(f'titleTextConstraint: {{searchTerm: "{query}", useFuzzySearch: true}}')
@@ -825,7 +868,7 @@ class ImdbClient:
             query_str = ADVANCED_SEARCH_QUERY_BASE.replace("{CONSTRAINTS}", constraints_str)
         else:
             query_str = ADVANCED_SEARCH_QUERY_BASE.replace("{CONSTRAINTS}", "")
-        data = self._graphql(query_str, {"first": first}, "AdvancedSearch")
+        data = self._graphql(query_str, {"first": first, "after": after}, "AdvancedSearch")
 
         results: list[SearchResult] = []
         edges = data.get("advancedTitleSearch", {}).get("edges", [])
@@ -845,22 +888,9 @@ class ImdbClient:
             if rs:
                 sr.rating = rs.get("aggregateRating")
             results.append(sr)
-        return results
-
-    def search_person(self, query: str, first: int = 20) -> list[SearchResult]:
-        data = self._graphql(PERSON_SEARCH_QUERY, {"searchTerm": query, "first": first}, "SearchPerson")
-        results: list[SearchResult] = []
-        edges = data.get("mainSearch", {}).get("edges", [])
-        for edge in edges:
-            node = edge.get("node", {}).get("entity", {})
-            if not node.get("id"):
-                continue
-            results.append(SearchResult(
-                id=node.get("id"),
-                title=node.get("nameText", {}).get("text"),
-                image_url=(node.get("primaryImage") or {}).get("url"),
-            ))
-        return results
+        pi = data.get("advancedTitleSearch", {}).get("pageInfo", {})
+        cursor = pi.get("endCursor") if pi.get("hasNextPage") else None
+        return results, cursor
 
     def get_name(self, name_id: str) -> Optional[Name]:
         nid = name_id if name_id.startswith("nm") else f"nm{name_id}"
