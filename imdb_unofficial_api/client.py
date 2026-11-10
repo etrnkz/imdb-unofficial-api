@@ -1,6 +1,6 @@
 import httpx
 from typing import Optional, Any
-from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem, BoxOffice, CompanyCreditItem, TechSpec, ReleaseDateItem, ParentsGuideItem, KeywordItem, AwardNomination, WatchOptionItem, PlotSummary, TitleImage, SoundtrackTrack, TitleConnection, TitleAka, ExternalLink
+from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem, BoxOffice, CompanyCreditItem, TechSpec, ReleaseDateItem, ParentsGuideItem, KeywordItem, AwardNomination, WatchOptionItem, PlotSummary, TitleImage, SoundtrackTrack, TitleConnection, TitleAka, ExternalLink, CrazyCredit, FaqItem, NewsArticle, CertificateInfo, ProductionStatusInfo, EngagementStats, RatingHistogramEntry, TitleVideo
 
 GRAPHQL_URL = "https://api.graphql.imdb.com/"
 
@@ -362,6 +362,27 @@ query GetExtras($id: ID!) {
         link(platform: WEB)
         description { value }
       }
+    }
+  }
+}
+"""
+
+GET_TITLE_DETAILS_QUERY = """
+query GetDetails($id: ID!) {
+  title(id: $id) {
+    id
+    crazyCredits(first: 10) { edges { node { id text { markdown } } } }
+    faqs(first: 10) { edges { node { id question { markdown } answer { markdown } isSpoiler } } }
+    news(first: 5) { edges { node { id byline date articleTitle { markdown } externalUrl image { url } } } }
+    certificate { rating country { text } }
+    productionStatus { currentProductionStage { id text } }
+    engagementStatistics {
+      watchlistStatistics { totalCount displayableCount { text } }
+      followerStatistics { totalCount displayableCount { text } }
+    }
+    aggregateRatingsBreakdown { histogram { histogramValues { rating voteCount } } }
+    primaryVideos(first: 10) {
+      edges { node { id name { value } description { value } contentType { id } runtime { value } thumbnail { url } playbackURLs { url displayName { value } } } }
     }
   }
 }
@@ -1181,6 +1202,113 @@ query GetPopular($limit: Int!) {
                 category=n.get("externalLinkCategory", {}).get("text"),
                 category_id=n.get("externalLinkCategory", {}).get("id"),
             ))
+        return items
+
+    def get_title_crazy_credits(self, title_id: str) -> list[CrazyCredit]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_DETAILS_QUERY, {"id": tid}, "GetDetails")
+        items: list[CrazyCredit] = []
+        for edge in data.get("title", {}).get("crazyCredits", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(CrazyCredit(
+                id=n.get("id"),
+                text=n.get("text", {}).get("markdown"),
+            ))
+        return items
+
+    def get_title_faqs(self, title_id: str) -> list[FaqItem]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_DETAILS_QUERY, {"id": tid}, "GetDetails")
+        items: list[FaqItem] = []
+        for edge in data.get("title", {}).get("faqs", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(FaqItem(
+                id=n.get("id"),
+                question=n.get("question", {}).get("markdown"),
+                answer=n.get("answer", {}).get("markdown"),
+                is_spoiler=n.get("isSpoiler", False),
+            ))
+        return items
+
+    def get_title_news(self, title_id: str) -> list[NewsArticle]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_DETAILS_QUERY, {"id": tid}, "GetDetails")
+        items: list[NewsArticle] = []
+        for edge in data.get("title", {}).get("news", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(NewsArticle(
+                id=n.get("id"),
+                byline=n.get("byline"),
+                date=n.get("date"),
+                article_title=n.get("articleTitle", {}).get("markdown"),
+                url=n.get("externalUrl"),
+                image_url=n.get("image", {}).get("url"),
+            ))
+        return items
+
+    def get_title_certificate(self, title_id: str) -> Optional[CertificateInfo]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_DETAILS_QUERY, {"id": tid}, "GetDetails")
+        cert = data.get("title", {}).get("certificate")
+        if not cert:
+            return None
+        return CertificateInfo(
+            rating=cert.get("rating"),
+            country=cert.get("country", {}).get("text"),
+        )
+
+    def get_title_production_status(self, title_id: str) -> Optional[ProductionStatusInfo]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_DETAILS_QUERY, {"id": tid}, "GetDetails")
+        ps = data.get("title", {}).get("productionStatus", {}).get("currentProductionStage")
+        if not ps:
+            return None
+        return ProductionStatusInfo(stage_id=ps.get("id"), stage_text=ps.get("text"))
+
+    def get_title_engagement_stats(self, title_id: str) -> EngagementStats:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_DETAILS_QUERY, {"id": tid}, "GetDetails")
+        es = data.get("title", {}).get("engagementStatistics", {})
+        ws = es.get("watchlistStatistics", {})
+        fs = es.get("followerStatistics")
+        return EngagementStats(
+            watchlist_count=ws.get("totalCount", 0),
+            watchlist_display=ws.get("displayableCount", {}).get("text"),
+            follower_count=fs.get("totalCount", 0) if fs else 0,
+            follower_display=fs.get("displayableCount", {}).get("text") if fs else None,
+        )
+
+    def get_title_rating_histogram(self, title_id: str) -> list[RatingHistogramEntry]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_DETAILS_QUERY, {"id": tid}, "GetDetails")
+        items: list[RatingHistogramEntry] = []
+        for entry in data.get("title", {}).get("aggregateRatingsBreakdown", {}).get("histogram", {}).get("histogramValues", []):
+            items.append(RatingHistogramEntry(
+                rating=entry.get("rating", 0),
+                vote_count=entry.get("voteCount", 0),
+            ))
+        return items
+
+    def get_title_videos(self, title_id: str) -> list[TitleVideo]:
+        tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+        data = self._graphql(GET_TITLE_DETAILS_QUERY, {"id": tid}, "GetDetails")
+        items: list[TitleVideo] = []
+        for edge in data.get("title", {}).get("primaryVideos", {}).get("edges", []):
+            n = edge.get("node", {})
+            v = TitleVideo(
+                id=n.get("id"),
+                name=n.get("name", {}).get("value"),
+                description=n.get("description", {}).get("value"),
+                content_type=n.get("contentType", {}).get("id"),
+                duration_seconds=n.get("runtime", {}).get("value"),
+                thumbnail_url=n.get("thumbnail", {}).get("url"),
+            )
+            for u in n.get("playbackURLs", []):
+                dn = u.get("displayName", {}).get("value")
+                url = u.get("url")
+                if dn and url:
+                    v.playback_urls[dn] = url
+            items.append(v)
         return items
 
     def close(self):

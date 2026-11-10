@@ -246,6 +246,67 @@ class ExternalLink:
 
 
 @dataclass
+class CrazyCredit:
+    id: Optional[str] = None
+    text: Optional[str] = None
+
+
+@dataclass
+class FaqItem:
+    id: Optional[str] = None
+    question: Optional[str] = None
+    answer: Optional[str] = None
+    is_spoiler: bool = False
+
+
+@dataclass
+class NewsArticle:
+    id: Optional[str] = None
+    byline: Optional[str] = None
+    date: Optional[str] = None
+    article_title: Optional[str] = None
+    url: Optional[str] = None
+    image_url: Optional[str] = None
+
+
+@dataclass
+class CertificateInfo:
+    rating: Optional[str] = None
+    country: Optional[str] = None
+
+
+@dataclass
+class ProductionStatusInfo:
+    stage_id: Optional[str] = None
+    stage_text: Optional[str] = None
+
+
+@dataclass
+class EngagementStats:
+    watchlist_count: int = 0
+    watchlist_display: Optional[str] = None
+    follower_count: int = 0
+    follower_display: Optional[str] = None
+
+
+@dataclass
+class RatingHistogramEntry:
+    rating: int = 0
+    vote_count: int = 0
+
+
+@dataclass
+class TitleVideo:
+    id: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    content_type: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    thumbnail_url: Optional[str] = None
+    playback_urls: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class SearchResult:
     id: Optional[str] = None
     title: Optional[str] = None
