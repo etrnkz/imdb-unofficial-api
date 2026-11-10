@@ -315,6 +315,51 @@ class RelatedList:
 
 
 @dataclass
+class NameHeight:
+    value_cm: Optional[float] = None
+    display: Optional[str] = None
+
+
+@dataclass
+class NameAge:
+    value: Optional[int] = None
+    text: Optional[str] = None
+
+
+@dataclass
+class NameBirthDetails:
+    location: Optional[str] = None
+    birth_name: Optional[str] = None
+
+
+@dataclass
+class NameDeathDetails:
+    location: Optional[str] = None
+    cause: Optional[str] = None
+
+
+@dataclass
+class NameSpouse:
+    spouse_id: Optional[str] = None
+    spouse_name: Optional[str] = None
+    is_current: bool = False
+
+
+@dataclass
+class NameAward:
+    is_winner: bool = False
+    award_name: Optional[str] = None
+    category: Optional[str] = None
+
+
+@dataclass
+class NameCredit:
+    category: Optional[str] = None
+    title_id: Optional[str] = None
+    title_name: Optional[str] = None
+
+
+@dataclass
 class TitleVideo:
     id: Optional[str] = None
     name: Optional[str] = None

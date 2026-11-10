@@ -72,6 +72,74 @@ def cmd_person(args):
             print("Person not found")
 
 
+def cmd_name_height(args):
+    with ImdbClient() as client:
+        h = client.get_name_height(args.id)
+        if h:
+            print(f"Height: {h.value_cm:.1f} cm" if h.value_cm else "Height: N/A")
+            if h.display:
+                print(f"Display: {h.display.encode('ascii', 'replace').decode()}")
+        else:
+            print("No height data")
+
+
+def cmd_name_age(args):
+    with ImdbClient() as client:
+        a = client.get_name_age(args.id)
+        if a:
+            print(f"Age: {a.text}")
+        else:
+            print("No age data")
+
+
+def cmd_name_birth(args):
+    with ImdbClient() as client:
+        b = client.get_name_birth_details(args.id)
+        print(f"Birth Name: {b.birth_name or 'N/A'}")
+        print(f"Birth Location: {b.location or 'N/A'}")
+
+
+def cmd_name_death(args):
+    with ImdbClient() as client:
+        d = client.get_name_death_details(args.id)
+        print(f"Death Location: {d.location or 'N/A'}")
+        print(f"Death Cause: {d.cause or 'N/A'}")
+
+
+def cmd_name_spouses(args):
+    with ImdbClient() as client:
+        items = client.get_name_spouses(args.id)
+        print(f"Spouses ({len(items)}):")
+        for i, s in enumerate(items, 1):
+            status = "current" if s.is_current else "former"
+            print(f"  #{i} {s.spouse_name} ({s.spouse_id}) [{status}]")
+
+
+def cmd_name_awards(args):
+    with ImdbClient() as client:
+        items = client.get_name_awards(args.id)
+        print(f"Awards ({len(items)}):")
+        for i, a in enumerate(items, 1):
+            w = "WON" if a.is_winner else "NOM"
+            print(f"  #{i} [{w}] {a.award_name} - {a.category}")
+
+
+def cmd_name_images(args):
+    with ImdbClient() as client:
+        items = client.get_name_images(args.id)
+        print(f"Images ({len(items)}):")
+        for i, img in enumerate(items, 1):
+            print(f"  #{i} [{img.type}] {img.url}")
+
+
+def cmd_name_credits(args):
+    with ImdbClient() as client:
+        items = client.get_name_credits(args.id)
+        print(f"Credits ({len(items)}):")
+        for i, c in enumerate(items, 1):
+            print(f"  #{i} [{c.category}] {c.title_name} ({c.title_id})")
+
+
 def cmd_cast(args):
     with ImdbClient() as client:
         cast = client.get_title_cast(args.id)
@@ -577,6 +645,30 @@ def main():
     p_meta = sub.add_parser("meta", help="Get title metadata (canonical ID)")
     p_meta.add_argument("id", help="IMDb ID")
 
+    p_nh = sub.add_parser("name-height", help="Get person's height")
+    p_nh.add_argument("id", help="IMDb ID (nm...)")
+
+    p_na = sub.add_parser("name-age", help="Get person's age")
+    p_na.add_argument("id", help="IMDb ID")
+
+    p_nb = sub.add_parser("name-birth", help="Get person's birth details")
+    p_nb.add_argument("id", help="IMDb ID")
+
+    p_nd = sub.add_parser("name-death", help="Get person's death details")
+    p_nd.add_argument("id", help="IMDb ID")
+
+    p_ns = sub.add_parser("name-spouses", help="Get person's spouses")
+    p_ns.add_argument("id", help="IMDb ID")
+
+    p_naw = sub.add_parser("name-awards", help="Get person's awards")
+    p_naw.add_argument("id", help="IMDb ID")
+
+    p_ni = sub.add_parser("name-images", help="Get person's images")
+    p_ni.add_argument("id", help="IMDb ID")
+
+    p_nc = sub.add_parser("name-credits", help="Get person's full credits")
+    p_nc.add_argument("id", help="IMDb ID")
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -624,6 +716,14 @@ def main():
         "interests": cmd_interests,
         "related-lists": cmd_related_lists,
         "meta": cmd_meta,
+        "name-height": cmd_name_height,
+        "name-age": cmd_name_age,
+        "name-birth": cmd_name_birth,
+        "name-death": cmd_name_death,
+        "name-spouses": cmd_name_spouses,
+        "name-awards": cmd_name_awards,
+        "name-images": cmd_name_images,
+        "name-credits": cmd_name_credits,
     }
     commands[args.command](args)
 

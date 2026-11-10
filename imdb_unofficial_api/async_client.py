@@ -1,6 +1,6 @@
 import httpx
 from typing import Optional, Any
-from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem, BoxOffice, CompanyCreditItem, TechSpec, ReleaseDateItem, ParentsGuideItem, KeywordItem, AwardNomination, WatchOptionItem, PlotSummary, TitleImage, SoundtrackTrack, TitleConnection, TitleAka, ExternalLink, CrazyCredit, FaqItem, NewsArticle, CertificateInfo, ProductionStatusInfo, EngagementStats, RatingHistogramEntry, TitleVideo, TitleMeta, InterestItem, RelatedList
+from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem, BoxOffice, CompanyCreditItem, TechSpec, ReleaseDateItem, ParentsGuideItem, KeywordItem, AwardNomination, WatchOptionItem, PlotSummary, TitleImage, SoundtrackTrack, TitleConnection, TitleAka, ExternalLink, CrazyCredit, FaqItem, NewsArticle, CertificateInfo, ProductionStatusInfo, EngagementStats, RatingHistogramEntry, TitleVideo, TitleMeta, InterestItem, RelatedList, NameHeight, NameAge, NameBirthDetails, NameDeathDetails, NameSpouse, NameAward, NameCredit
 
 GRAPHQL_URL = "https://api.graphql.imdb.com/"
 
@@ -21,7 +21,7 @@ from .client import (
     GET_TITLE_SEASONS_QUERY, GET_TITLE_EPISODES_QUERY,
     GET_TITLE_REVIEWS_QUERY, GET_TITLE_MEDIA_QUERY, ADVANCED_SEARCH_QUERY_BASE,
     GET_TITLE_EXTRAS_QUERY, GET_TITLE_INFO_QUERY, GET_TITLE_DETAILS_QUERY,
-    GET_TITLE_RECOMMENDATIONS_QUERY, GET_TITLE_META_QUERY,
+    GET_TITLE_RECOMMENDATIONS_QUERY, GET_TITLE_META_QUERY, GET_NAME_DETAILS_QUERY,
 )
 
 
@@ -721,6 +721,93 @@ query GetPopular($limit: Int!) {
             items.append(RelatedList(
                 id=n.get("id"), name=n.get("name", {}).get("originalText"),
                 description=desc.get("originalText", {}).get("markdown") if desc else None,
+            ))
+        return items
+
+    async def _fetch_name_details(self, name_id: str) -> dict:
+        nid = name_id if name_id.startswith("nm") else f"nm{name_id}"
+        data = await self._graphql(GET_NAME_DETAILS_QUERY, {"id": nid}, "GetNameDetails")
+        return data.get("name", {})
+
+    async def get_name_height(self, name_id: str) -> Optional[NameHeight]:
+        data = await self._fetch_name_details(name_id)
+        h = data.get("height")
+        if not h or not h.get("measurement"):
+            return None
+        return NameHeight(
+            value_cm=h["measurement"].get("value"),
+            display=h.get("displayableProperty", {}).get("value", {}).get("plainText"),
+        )
+
+    async def get_name_age(self, name_id: str) -> Optional[NameAge]:
+        data = await self._fetch_name_details(name_id)
+        a = data.get("age")
+        if not a:
+            return None
+        return NameAge(value=a.get("value"), text=a.get("text"))
+
+    async def get_name_birth_details(self, name_id: str) -> NameBirthDetails:
+        data = await self._fetch_name_details(name_id)
+        return NameBirthDetails(
+            location=data.get("birthLocation", {}).get("text"),
+            birth_name=data.get("birthName", {}).get("text"),
+        )
+
+    async def get_name_death_details(self, name_id: str) -> NameDeathDetails:
+        data = await self._fetch_name_details(name_id)
+        dl = data.get("deathLocation")
+        dc = data.get("deathCause")
+        return NameDeathDetails(
+            location=dl.get("text") if dl else None,
+            cause=dc.get("text") if dc else None,
+        )
+
+    async def get_name_spouses(self, name_id: str) -> list[NameSpouse]:
+        data = await self._fetch_name_details(name_id)
+        items: list[NameSpouse] = []
+        for s in data.get("spouses", []):
+            sp = s.get("spouse", {})
+            name_node = sp.get("name", {})
+            items.append(NameSpouse(
+                spouse_id=name_node.get("id"),
+                spouse_name=name_node.get("nameText", {}).get("text"),
+                is_current=s.get("current", False),
+            ))
+        return items
+
+    async def get_name_awards(self, name_id: str) -> list[NameAward]:
+        data = await self._fetch_name_details(name_id)
+        items: list[NameAward] = []
+        for edge in data.get("awardNominations", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(NameAward(
+                is_winner=n.get("isWinner", False),
+                award_name=n.get("award", {}).get("text"),
+                category=n.get("category", {}).get("text"),
+            ))
+        return items
+
+    async def get_name_images(self, name_id: str) -> list[TitleImage]:
+        data = await self._fetch_name_details(name_id)
+        items: list[TitleImage] = []
+        for edge in data.get("images", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(TitleImage(
+                id=n.get("id"), url=n.get("url"), width=n.get("width"),
+                height=n.get("height"), type=n.get("type"),
+            ))
+        return items
+
+    async def get_name_credits(self, name_id: str) -> list[NameCredit]:
+        data = await self._fetch_name_details(name_id)
+        items: list[NameCredit] = []
+        for edge in data.get("credits", {}).get("edges", []):
+            n = edge.get("node", {})
+            t = n.get("title", {})
+            items.append(NameCredit(
+                category=n.get("category", {}).get("text"),
+                title_id=t.get("id"),
+                title_name=t.get("titleText", {}).get("text"),
             ))
         return items
 

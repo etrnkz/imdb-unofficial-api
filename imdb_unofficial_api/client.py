@@ -1,6 +1,6 @@
 import httpx
 from typing import Optional, Any
-from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem, BoxOffice, CompanyCreditItem, TechSpec, ReleaseDateItem, ParentsGuideItem, KeywordItem, AwardNomination, WatchOptionItem, PlotSummary, TitleImage, SoundtrackTrack, TitleConnection, TitleAka, ExternalLink, CrazyCredit, FaqItem, NewsArticle, CertificateInfo, ProductionStatusInfo, EngagementStats, RatingHistogramEntry, TitleVideo, TitleMeta, InterestItem, RelatedList
+from .models import Title, Name, SearchResult, Rating, Credit, Season, EpisodeInfo, UserReview, MetacriticReview, Trailer, TriviaItem, QuoteItem, GoofItem, BoxOffice, CompanyCreditItem, TechSpec, ReleaseDateItem, ParentsGuideItem, KeywordItem, AwardNomination, WatchOptionItem, PlotSummary, TitleImage, SoundtrackTrack, TitleConnection, TitleAka, ExternalLink, CrazyCredit, FaqItem, NewsArticle, CertificateInfo, ProductionStatusInfo, EngagementStats, RatingHistogramEntry, TitleVideo, TitleMeta, InterestItem, RelatedList, NameHeight, NameAge, NameBirthDetails, NameDeathDetails, NameSpouse, NameAward, NameCredit
 
 GRAPHQL_URL = "https://api.graphql.imdb.com/"
 
@@ -115,6 +115,33 @@ query GetName($id: ID!) {
               releaseYear { year }
               ratingsSummary { aggregateRating }
             }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+GET_NAME_DETAILS_QUERY = """
+query GetNameDetails($id: ID!) {
+  name(id: $id) {
+    id
+    height { measurement { value unit } displayableProperty { value { plainText } } }
+    age { value text }
+    birthLocation { text }
+    deathLocation { text }
+    deathCause { text }
+    birthName { text }
+    spouses { spouse { name { nameText { text } id } } current }
+    awardNominations(first: 20) { edges { node { isWinner award { text } category { text } } } }
+    images(first: 20) { edges { node { url width height type } } }
+    credits(first: 50) {
+      edges {
+        node {
+          ... on Credit {
+            category { text }
+            title { id titleText { text } }
           }
         }
       }
@@ -1383,6 +1410,92 @@ query GetPopular($limit: Int!) {
                 id=n.get("id"),
                 name=n.get("name", {}).get("originalText"),
                 description=desc.get("originalText", {}).get("markdown") if desc else None,
+            ))
+        return items
+
+    def _fetch_name_details(self, name_id: str) -> dict:
+        nid = name_id if name_id.startswith("nm") else f"nm{name_id}"
+        return self._graphql(GET_NAME_DETAILS_QUERY, {"id": nid}, "GetNameDetails")
+
+    def get_name_height(self, name_id: str) -> Optional[NameHeight]:
+        data = self._fetch_name_details(name_id).get("name", {})
+        h = data.get("height")
+        if not h or not h.get("measurement"):
+            return None
+        return NameHeight(
+            value_cm=h["measurement"].get("value"),
+            display=h.get("displayableProperty", {}).get("value", {}).get("plainText"),
+        )
+
+    def get_name_age(self, name_id: str) -> Optional[NameAge]:
+        data = self._fetch_name_details(name_id).get("name", {})
+        a = data.get("age")
+        if not a:
+            return None
+        return NameAge(value=a.get("value"), text=a.get("text"))
+
+    def get_name_birth_details(self, name_id: str) -> NameBirthDetails:
+        data = self._fetch_name_details(name_id).get("name", {})
+        return NameBirthDetails(
+            location=data.get("birthLocation", {}).get("text"),
+            birth_name=data.get("birthName", {}).get("text"),
+        )
+
+    def get_name_death_details(self, name_id: str) -> NameDeathDetails:
+        data = self._fetch_name_details(name_id).get("name", {})
+        dl = data.get("deathLocation")
+        dc = data.get("deathCause")
+        return NameDeathDetails(
+            location=dl.get("text") if dl else None,
+            cause=dc.get("text") if dc else None,
+        )
+
+    def get_name_spouses(self, name_id: str) -> list[NameSpouse]:
+        data = self._fetch_name_details(name_id).get("name", {})
+        items: list[NameSpouse] = []
+        for s in data.get("spouses", []):
+            sp = s.get("spouse", {})
+            name_node = sp.get("name", {})
+            items.append(NameSpouse(
+                spouse_id=name_node.get("id"),
+                spouse_name=name_node.get("nameText", {}).get("text"),
+                is_current=s.get("current", False),
+            ))
+        return items
+
+    def get_name_awards(self, name_id: str) -> list[NameAward]:
+        data = self._fetch_name_details(name_id).get("name", {})
+        items: list[NameAward] = []
+        for edge in data.get("awardNominations", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(NameAward(
+                is_winner=n.get("isWinner", False),
+                award_name=n.get("award", {}).get("text"),
+                category=n.get("category", {}).get("text"),
+            ))
+        return items
+
+    def get_name_images(self, name_id: str) -> list[TitleImage]:
+        data = self._fetch_name_details(name_id).get("name", {})
+        items: list[TitleImage] = []
+        for edge in data.get("images", {}).get("edges", []):
+            n = edge.get("node", {})
+            items.append(TitleImage(
+                id=n.get("id"), url=n.get("url"), width=n.get("width"),
+                height=n.get("height"), type=n.get("type"),
+            ))
+        return items
+
+    def get_name_credits(self, name_id: str) -> list[NameCredit]:
+        data = self._fetch_name_details(name_id).get("name", {})
+        items: list[NameCredit] = []
+        for edge in data.get("credits", {}).get("edges", []):
+            n = edge.get("node", {})
+            t = n.get("title", {})
+            items.append(NameCredit(
+                category=n.get("category", {}).get("text"),
+                title_id=t.get("id"),
+                title_name=t.get("titleText", {}).get("text"),
             ))
         return items
 
