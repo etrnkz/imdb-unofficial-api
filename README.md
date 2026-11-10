@@ -6,6 +6,8 @@
 
 Unofficial Python SDK for IMDb's internal GraphQL API. **56 typed endpoints** covering titles, names, credits, charts, reviews, media, and more. No API key required.
 
+**Features:** sync + async clients · full type hints · 55 CLI subcommands · cursor pagination · batch fetching · retry with backoff · optional caching · custom exceptions · no external dependencies beyond httpx
+
 ---
 
 ## Install
